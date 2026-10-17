@@ -1,0 +1,13 @@
+# site_bucket_name, evidence_bucket_name, and evidence_scan_test_bucket_name
+# are no longer variables — infrastructure/envs/test/main.tf now computes
+# them deterministically from the account ID, same as oidc_provider_arn/
+# state_bucket_arn (Phase 7 slice 9).
+alert_email = "<founder-gmail>"
+
+# *_deployment_package_path variables all default to
+# ../../../services/api/dist/<name>.zip (built by `npm run build:lambda`) —
+# override only if testing a package built somewhere else.
+
+# Left at their defaults (empty/null) until Stage B of docs/DNS_RUNBOOK.md:
+# app_origin, apex_domain, domain_aliases, cloudfront_acm_certificate_arn,
+# api_custom_domain_name, api_regional_acm_certificate_arn, ses_configuration_set_name

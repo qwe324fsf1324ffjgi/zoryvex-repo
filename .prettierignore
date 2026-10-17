@@ -1,0 +1,41 @@
+node_modules
+dist
+build
+out
+.next
+coverage
+*.tfstate
+*.tfstate.*
+.terraform
+package-lock.json
+next-env.d.ts
+
+# Pre-existing Phase 0-2 governance docs: out of scope for the Phase 3
+# tooling pass, not reformatted to avoid unrelated diffs.
+CLAUDE.md
+PRODUCT_SPEC.md
+docs/PRODUCT_SPEC.md
+.zoryvex/
+docs/COMMERCIAL_SCORECARD.md
+docs/COST_GUARDRAILS.md
+docs/DEPLOYMENT_STATUS.md
+docs/FOUNDER_READINESS.md
+docs/LOOP_RUNBOOK.md
+docs/MANUAL_ACTIONS.md
+docs/RISK_REGISTER.md
+docs/SOURCES.md
+docs/THREAT_MODEL.md
+docs/V48_BINDING.md
+docs/COMMERCIAL_RUNBOOK.md
+docs/CUSTOMER_DEVOTION.md
+docs/DECISIONS.md
+docs/adr/0001-no-cognito-passwordless-email-auth.md
+
+# Agent worktrees. These are full copies of the repository checked out under
+# .claude/ while a background task runs, and they are git-ignored, so nothing
+# in them is ever committed. Prettier does not know that and walked into one,
+# which made `npm run validate:all` fail for a reason that had nothing to do
+# with the working tree: the exclusions above are paths from the repo root, so
+# docs/DECISIONS.md is skipped and
+# .claude/worktrees/<name>/docs/DECISIONS.md is not.
+.claude/worktrees/

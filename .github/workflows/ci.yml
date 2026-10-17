@@ -1,0 +1,422 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Lets a deploy be started by hand from the Actions tab. This exists for one
+  # specific situation that has already happened: Actions is unavailable on a
+  # billing gate, a merge to main lands anyway, its run fails to start, and
+  # nothing re-triggers it when the allowance resets. Without this the only
+  # options are an empty commit or re-running the failed run.
+  #
+  # The guaranteed path is still re-running that failed push run, which
+  # replays the original event exactly. This is the convenient one, and it
+  # depends on GitHub issuing the same `ref:refs/heads/main` OIDC subject for
+  # workflow_dispatch as for push — documented for branch-triggered workflows,
+  # not stated for this trigger by name. If it turns out otherwise the manual
+  # run fails at the credential exchange, visibly and harmlessly, and the push
+  # path is unaffected.
+  workflow_dispatch:
+    inputs:
+      allow_blanking:
+        description: >
+          Let the deploy clear a live setting. Leave this off unless a plan has
+          already been refused for blanking one, and you have read which
+          setting and agree it should go.
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+# One run per ref at a time.
+#
+# On a pull request this cancels the superseded run when a new commit is
+# pushed, which matters here beyond tidiness: this account is on GitHub Free
+# with a fixed monthly Actions allowance, and Actions has already been
+# unavailable for days at a time after hitting it. A run that is about to be
+# thrown away should not spend eight minutes of e2e first.
+#
+# On main it never cancels — it queues. deploy-test runs a real
+# `terraform apply` against the shared state, so two pushes in quick
+# succession would otherwise race for the S3-native state lock and one deploy
+# would fail on a lock rather than on anything about the change.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  changed-paths:
+    name: Detect doc-only changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.check.outputs.docs_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether only docs/state files changed
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          # A force-push, a brand-new branch, or the first push to main can
+          # make BASE unusable (empty, all-zero SHA, or unknown to this
+          # clone). Fail open to "not docs-only" so validate/e2e/deploy
+          # always run rather than silently skipping on an edge case.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "Base commit unusable; treating as NOT docs-only (fail open)."
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
+          echo "Changed files:"
+          echo "$CHANGED"
+          # Anything outside docs/, .zoryvex/, or a root-level *.md file
+          # forces full CI. Playwright/Deploy can never be affected by a
+          # change confined to those paths, so skipping them there is safe,
+          # not speculative — this exists purely to avoid burning GitHub
+          # Actions minutes on runs that cannot find anything.
+          if echo "$CHANGED" | grep -qvE '^(docs/|\.zoryvex/|[A-Za-z0-9_.-]+\.md$)'; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit / contract tests
+        run: npm test
+
+      - name: OpenAPI contract validate
+        run: npm run openapi:validate
+
+      - name: OpenAPI route coverage
+        run: npm run openapi:coverage
+
+      - name: Secret scan
+        run: npm run secrets:scan
+
+      - name: Terraform policy check
+        run: npm run terraform:policy
+
+      - name: Real-mode awareness check
+        run: npm run real-mode:check
+
+      - name: Product copy voice check
+        run: npm run copy:voice
+
+      - name: DynamoDB index grant check
+        run: npm run gsi:check
+
+      - name: Settlement table check
+        run: npm run fees:check
+
+      - name: Feature-flag env wiring check
+        run: npm run flags:wiring
+
+      - name: Project state schema check
+        run: npm run state:check
+
+      # Wrapped rather than bare, because `npm audit` exits non-zero both for
+      # a real advisory and for its own endpoint being unreachable. The bare
+      # form failed this job on 2026-09-04 over a five-minute registry
+      # timeout, with nothing wrong in the repository. The wrapper retries a
+      # transport failure and reports it as UNMEASURED; a real advisory
+      # still fails the build.
+      - name: Dependency audit
+        run: npm run audit:deps
+
+      - name: License check
+        run: npm run license:check
+
+      - name: Build apps/web (static export)
+        run: npm run build -w apps/web
+
+      - name: Static export assertion
+        run: npm run static-export:assert
+
+      # Runs against the built export rather than the source, because a title
+      # is assembled from a chain of layouts and only the output says what a
+      # browser will actually show.
+      - name: Page shell check
+        run: npm run pages:check
+
+      - name: Bundle budget assertion
+        run: npm run bundle:budget
+
+      - name: Build apps/web-safe-shell (static export)
+        run: npm run build -w apps/web-safe-shell
+
+      - name: Safe-shell static export assertion
+        run: npm run static-export:assert:safe-shell
+
+      - name: Safe-shell forbidden-content assertion
+        run: npm run safe-shell:assert
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt check
+        run: terraform fmt -recursive -check -diff infrastructure/
+
+      - name: Terraform validate (bootstrap)
+        working-directory: infrastructure/envs/bootstrap
+        # Matches what scripts/validate.mjs does, so a local run and this one
+        # stay the same command in the same place.
+        env:
+          TF_DATA_DIR: .terraform-validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Terraform validate (test)
+        working-directory: infrastructure/envs/test
+        # Matches what scripts/validate.mjs does, so a local run and this one
+        # stay the same command in the same place.
+        env:
+          TF_DATA_DIR: .terraform-validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Terraform validate (production)
+        working-directory: infrastructure/envs/production
+        # Matches what scripts/validate.mjs does, so a local run and this one
+        # stay the same command in the same place.
+        env:
+          TF_DATA_DIR: .terraform-validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  e2e:
+    name: End-to-end / accessibility (Playwright)
+    needs: [changed-paths]
+    if: needs.changed-paths.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      # The browsers are the slowest part of this job that is not the tests.
+      # Chromium and WebKit are a fresh download on every run otherwise, and
+      # this account is on GitHub Free with a fixed monthly Actions
+      # allowance that has already run out once, taking Actions down for
+      # days. Minutes are the real budget here, not the number of workflows.
+      #
+      # Keyed on the lockfile because that is what changes when Playwright's
+      # version changes, and a browser build cached against the wrong
+      # version would be worse than no cache: `playwright install` would
+      # download the right one anyway, so the miss costs nothing beyond what
+      # it costs today.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # Still --with-deps on every run: the cache holds the browsers, not the
+      # system packages they need, and install skips any browser already
+      # present at the right version. A hit saves the download and keeps the
+      # OS dependencies correct.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Playwright e2e + accessibility suite (desktop + mobile)
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 3
+
+  deploy-test:
+    name: Deploy (test)
+    needs: [validate, e2e, changed-paths]
+    # infrastructure/envs/test's ci_deploy_role trust policy (subject_claim)
+    # is an exact StringEquals match on repo:.../zoryvex-platform:ref:refs/heads/main
+    # — no wildcard, so a pull_request-triggered run could never assume this
+    # role anyway. This condition just fails closed explicitly instead of
+    # letting every PR run attempt and fail an AWS credential exchange.
+    #
+    # always() is used so this job's own condition is evaluated even when a
+    # dependency was skipped, rather than being short-circuited by default
+    # needs-chain propagation. Every requirement is then stated explicitly.
+    #
+    # e2e must have actually succeeded — it is not enough for it to have been
+    # skipped. This condition used to accept `e2e.result == 'skipped'`, on the
+    # reasoning that e2e is skipped for docs-only changes. That reasoning does
+    # not hold, because deploy is skipped for docs-only changes too: whenever
+    # docs_only is 'false', e2e runs, so it can only report success or
+    # failure. The one way to reach this job with a skipped e2e was for
+    # changed-paths itself to fail — which skips e2e, leaves docs_only empty
+    # (and therefore != 'true'), and would have let a completely untested
+    # commit deploy to TEST. Hence the explicit changed-paths success check
+    # as well.
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      needs.changed-paths.result == 'success' &&
+      needs.validate.result == 'success' &&
+      needs.e2e.result == 'success' &&
+      needs.changed-paths.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      - name: Build Lambda packages
+        run: npm run build:lambda
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # infrastructure/modules/ci-deploy-role names the role
+          # zoryvex-${environment_name}-deploy (infrastructure/modules/ci-deploy-role/main.tf),
+          # instantiated for "test" in infrastructure/envs/test/main.tf's
+          # ci_deploy_role module -> zoryvex-test-deploy. Account id is the
+          # same EXPECTED_AWS_ACCOUNT_ID constant scripts/lib/deploy-lib.mjs
+          # already checks in and fails closed against (not a secret — an
+          # AWS account id, already committed).
+          role-to-assume: arn:aws:iam::071770169654:role/zoryvex-test-deploy
+          aws-region: eu-west-1
+
+      - name: Deploy test (plan -> saved-plan apply -> smoke test)
+        env:
+          # Every *_deployment_package_path and the 3 deterministic bucket
+          # names now have real defaults / are locals in
+          # infrastructure/envs/test — only the values that genuinely can't
+          # be derived (Stage-B DNS/ACM state, which isn't secret but must
+          # stay correct or a CI-driven apply would silently regress live
+          # infra back to pre-Stage-B empty/null; and the founder's personal
+          # email, which is real PII) are supplied here, from repository
+          # Variables/Secrets rather than a committed tfvars file.
+          TF_VAR_app_origin: ${{ vars.APP_ORIGIN }}
+          TF_VAR_apex_domain: ${{ vars.APEX_DOMAIN }}
+          TF_VAR_domain_aliases: ${{ vars.DOMAIN_ALIASES }}
+          TF_VAR_cloudfront_acm_certificate_arn: ${{ vars.CLOUDFRONT_ACM_CERTIFICATE_ARN }}
+          TF_VAR_api_custom_domain_name: ${{ vars.API_CUSTOM_DOMAIN_NAME }}
+          TF_VAR_api_regional_acm_certificate_arn: ${{ vars.API_REGIONAL_ACM_CERTIFICATE_ARN }}
+          TF_VAR_ses_configuration_set_name: ${{ vars.SES_CONFIGURATION_SET_NAME }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          # Next.js static export bakes NEXT_PUBLIC_* in at build time
+          # (apps/web/src/lib/real-api/client.ts's isRealApiConfigured()),
+          # and this deploy step now builds apps/web itself — so without
+          # this, the freshly built site silently reverts to local-fake
+          # data on every deploy (docs/DECISIONS.md 2026-08-15 already
+          # named this exact gap). Same host as TF_VAR_api_custom_domain_name,
+          # which is also what the CSP connect-src this build ships with
+          # allows (infrastructure/envs/test/main.tf's local.api_origin) —
+          # they must match or every real-mode fetch is CSP-blocked.
+          NEXT_PUBLIC_API_BASE_URL: https://${{ vars.API_CUSTOM_DOMAIN_NAME }}
+          # The site's own origin, for metadataBase, openGraph URLs and the
+          # sitemap. Separate from the API URL because they are different
+          # hosts; deriving one from the other by string surgery survives
+          # only until the day that pattern stops holding.
+          NEXT_PUBLIC_SITE_URL: ${{ vars.APP_ORIGIN }}
+          # Absent, so this build refuses crawlers. TEST serves the whole
+          # product on a public hostname, and getting a pre-launch
+          # environment out of a search index is far more work than keeping
+          # it out. Production sets this to 'true' deliberately, at launch.
+        # --allow-blanking is reachable only from a manual run, and only when
+        # somebody ticks the box. deploy.mjs refuses a plan that would replace
+        # a live, non-empty setting with an empty one, because that is what a
+        # missing GitHub repository variable looks like: it arrives as an
+        # empty string and the variable's own default makes it read as a
+        # deliberate choice. The guard cannot tell that apart from a setting
+        # somebody meant to remove, which is the point of it.
+        #
+        # So removing one is a two-step: the automatic deploy refuses and
+        # names the setting, a person reads that and re-runs manually with the
+        # box ticked. An automatic push can never blank anything, and the
+        # decision is recorded as a separate run by a named person rather than
+        # buried in a diff.
+        run: >
+          node scripts/deploy.mjs --env test --confirm test --apply
+          ${{ inputs.allow_blanking && '--allow-blanking' || '' }}
+
+      # Independent of the deploy that just ran. deploy.mjs smoke-tests the
+      # API it deployed; this exercises the whole deployed surface the way a
+      # visitor reaches it - every page over CloudFront, the security
+      # headers, the authorization boundaries, and the webhook signature
+      # check - and asserts the build serving traffic is this commit.
+      #
+      # It runs after the deploy rather than as part of it deliberately: a
+      # deploy that rolled itself back should still be checked, and a
+      # failure here should name what is wrong with the live environment
+      # rather than being reported as a deploy step failing.
+      - name: Verify the deployed environment
+        env:
+          # APP_ORIGIN, not the apex domain, because this is the exact origin
+          # the deployed app is configured with - the one the CSP allows and
+          # the authorizer matches Origin against. Reconstructing it from a
+          # bare hostname would let the two drift apart silently.
+          SITE_URL: ${{ vars.APP_ORIGIN }}
+          API_URL: https://${{ vars.API_CUSTOM_DOMAIN_NAME }}
+        run: node scripts/verify-deployment.mjs --site "$SITE_URL" --api "$API_URL" --expect-version "${{ github.sha }}"

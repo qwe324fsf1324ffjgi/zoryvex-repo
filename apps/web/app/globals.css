@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens: restrained dark-ink / warm-white palette with one vivid
+ * accent (emerald — reads as "verified/proof", deliberately not a generic
+ * AI blue-purple gradient). Every text/background pairing below is
+ * checked against WCAG 2.2 AA (>=4.5:1 for normal text) — see the
+ * computation in the Phase 4 PR description; do not change a color
+ * without re-checking contrast.
+ */
+@theme {
+  --color-ink-950: #0e1013; /* primary text on warm-white; dark surface bg */
+  --color-ink-900: #14171d;
+  --color-ink-700: #3a3f4b; /* secondary text on warm-white (10.0:1) */
+  --color-ink-500: #6b7280; /* muted text on warm-50 ONLY (4.6:1). On warm-100 (Card bg) this
+                                drops to 4.21:1 and fails AA. Because a shared component can't
+                                know its background, every FormField/Checkbox/RadioGroup hint
+                                uses ink-700 instead — reserve ink-500 for one-off page text you
+                                have personally confirmed sits on warm-50. Caught twice by the
+                                axe accessibility CI check (a page, then a shared component),
+                                not a guess either time. */
+
+  --color-warm-50: #fbf9f5; /* page background */
+  --color-warm-100: #f3efe7; /* card / section background */
+  --color-warm-200: #e8e2d5; /* borders, dividers */
+
+  --color-accent-700: #0b6b4f; /* accent text/icons on warm-white (6.2:1). A link styled with this
+                                   color INSIDE a paragraph of body text also needs `underline` —
+                                   color alone isn't enough contrast against ink-700 body text
+                                   (axe "link-in-text-block"). Standalone links (nav, footer, a
+                                   link that IS the whole line) don't need it. */
+  --color-accent-600: #0f7a5c; /* accent fill (buttons) — pair with white text */
+  --color-accent-800: #08543e; /* pressed fill, one step darker than the hover shade. Exists so a
+                                   press is visible on a touch screen, where there is no hover
+                                   state to darken first and a tap otherwise produced no response
+                                   at all until the work finished. Darker than accent-600, so
+                                   white text on it is higher contrast, not lower. */
+  --color-accent-400: #4fc79a; /* accent text on ink-950 dark surfaces (9.0:1) */
+
+  --color-error-700: #b42318; /* error text on warm-white (6.3:1), and the destructive button fill
+                                   — white text on it is 6.6:1, so it clears AA as a filled
+                                   control as well as as text. */
+  --color-error-800: #921c13; /* destructive hover, one step darker */
+  --color-error-900: #7a1710; /* destructive pressed. Same reasoning as accent-800: on a touch
+                                   screen there is no hover to darken first, so without this a tap
+                                   on "delete everything" produced no response at all until the
+                                   work finished. Darker than the fill, so the text contrast goes
+                                   up rather than down. */
+  --color-error-400: #f1948a; /* error text on ink-950 (8.5:1) */
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--color-warm-50);
+  color: var(--color-ink-950);
+  font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

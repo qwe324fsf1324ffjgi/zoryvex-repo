@@ -1,0 +1,38 @@
+/*
+ * Deliberately no Tailwind, no design tokens, no shared code with apps/web
+ * — this file is plain CSS so the safe-shell's entire dependency graph and
+ * bundle can be grepped and reasoned about independently.
+ */
+html {
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #111111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+main {
+  max-width: 32rem;
+  text-align: center;
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+p {
+  color: #444444;
+}

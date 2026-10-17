@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "zoryvex-state.schema.json",
+  "title": "Zoryvex project state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "phase", "phaseObjective", "exactSuccessPhrase", "utcTime", "toolVersions",
+    "checks", "blockers", "loopMode", "cumulativeGoalTurnCount",
+    "consecutiveIdenticalFailureCount", "goalTurnLimit", "pollingCheckLimit",
+    "usagePauseState", "resolvedProjectPath", "repository", "dependencyLockHash",
+    "baselineTestEvidence", "changedFileList", "lastCommandResult",
+    "inFlightProcessesOrJobs", "lastVerifiedCheckpoint", "nextSafeAction",
+    "founderGovernmentActionAuthorization", "paystackFounderStatus",
+    "paystackDashboardVerification", "authorizedLaunchModes", "selectedLaunchMode",
+    "nigerianObligations"
+  ],
+  "properties": {
+    "phase": { "type": "string" },
+    "phaseObjective": { "type": "string" },
+    "exactSuccessPhrase": { "type": "string" },
+    "utcTime": { "type": "string", "format": "date-time" },
+    "toolVersions": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "enum": ["PASS", "WARN", "BLOCKED", "PENDING"] },
+          "detail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "loopMode": { "enum": ["none", "goal", "polling"] },
+    "cumulativeGoalTurnCount": { "type": "integer", "minimum": 0 },
+    "consecutiveIdenticalFailureCount": { "type": "integer", "minimum": 0 },
+    "goalTurnLimit": { "const": 12 },
+    "pollingCheckLimit": { "const": 6 },
+    "usagePauseState": { "enum": ["none", "paused"] },
+    "resolvedProjectPath": { "type": "string" },
+    "repository": {
+      "type": "object",
+      "required": ["remoteHost", "name", "owner", "branch", "upstream", "mergeState", "lastGoodCommit"],
+      "properties": {
+        "remoteHost": { "type": "string" },
+        "name": { "type": "string" },
+        "owner": { "type": "string", "description": "Redacted — never the literal account login/ID." },
+        "branch": { "type": "string" },
+        "upstream": { "type": ["string", "null"] },
+        "mergeState": { "type": "string" },
+        "lastGoodCommit": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "intentionalWorkingTreeSummary": { "type": "string" },
+    "dependencyLockHash": { "type": ["string", "null"] },
+    "baselineTestEvidence": { "type": ["string", "null"] },
+    "changedFileList": { "type": "array", "items": { "type": "string" } },
+    "lastCommandResult": { "type": "string" },
+    "inFlightProcessesOrJobs": { "type": "array", "items": { "type": "string" } },
+    "lastVerifiedCheckpoint": { "type": "string" },
+    "nextSafeAction": { "type": "string" },
+    "founderGovernmentActionAuthorization": { "const": false },
+    "paystackFounderStatus": { "type": "string" },
+    "paystackDashboardVerification": { "type": "string" },
+    "authorizedLaunchModes": {
+      "type": "array",
+      "items": { "enum": ["CONDITIONAL_COMMERCIAL", "SAFE_TECHNICAL_NEUTRAL_STATUS"] }
+    },
+    "selectedLaunchMode": { "enum": ["CONDITIONAL_COMMERCIAL", "SAFE_TECHNICAL_NEUTRAL_STATUS", null] },
+    "nigerianObligations": {
+      "type": "object",
+      "additionalProperties": { "const": "NOT AUTHORIZED BY FOUNDER" }
+    }
+  }
+}

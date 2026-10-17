@@ -1,0 +1,852 @@
+{
+  "phase": "7",
+  "phaseObjective": "Auth, evidence, matching, privacy, and operations on the real AWS backend. ALL 11 SLICES NOW COMPLETE. Slice 10 (load, quota, reserved concurrency, SLO) closed 2026-08-28 and was the last outstanding item. PHASE 7 PASSED IS NOT YET DECLARED: the work sits on branch phase7/slice10-reserved-concurrency-slo pending merge to main and final post-merge verification, and the phrase is deliberately withheld until then. Slice 10 evidence: the Lambda concurrent-executions restriction of 10 that blocked every previous attempt was a new-account restriction, not the AWS default; it has been lifted to the default of 1000, which is sufficient. The separate request to raise it to 1001 shows CASE_CLOSED and was never granted, and did not need to be. Reserved concurrency of 5 was applied to the 37 currently-deployed TEST functions via lambda:PutFunctionConcurrency rather than Terraform, because the aws_lambda_function resource carries filename and source_code_hash alongside reserved_concurrent_executions and any apply touching them would also have redeployed 37 Lambda bundles, which was not authorized. Terraform remains the declared desired configuration and its 44 sites read var.lambda_reserved_concurrency. Live reservation is 185 of 1000 with 815 unreserved; the eventual committed TEST configuration is 221 with 779 unreserved, the difference being the 8 functions not yet deployed plus verification_reminder_job at the scheduled-job module default of 1. Verified independently after the change: 37/37 at reservation 5, 37/37 CodeSha256 unchanged, 37/37 LastModified unchanged, no unapproved function reserved. The first probe attempt was UNMEASURED, not a failed SLO: all 25 requests died in local DNS resolution and it is preserved unaltered at docs/evidence/slice10-probe-unmeasured-dns-2026-08-28.json (sha256 9f86de4fb99cda6cd55d3435658cad10996714fdd6ee1614d4411d2c9d87f4f2). The second and only valid measurement passed every threshold: 25/25 HTTP 200, zero 429, zero 5xx, zero timeouts, zero network errors, p50 387ms, p95 1159ms, max 1207ms, evidence sha256 ea2ea549c7b3eea93b953e1002baa9fa3ddbfdc19b5b78ba3a6289f496211744. Production remains untouched throughout. Known and deliberately out of scope: 8 committed functions remain undeployed to TEST, and a full terraform apply currently also contains those additions, a code redeployment of 37 bundles, and an unrelated CI deploy-role IAM policy change.",
+  "exactSuccessPhrase": "PHASE 7 PASSED",
+  "utcTime": "2026-09-10T14:30:00Z",
+  "toolVersions": {
+    "git": "2.53.0.windows.2",
+    "gh": "2.97.0",
+    "node": "24.19.0",
+    "npm": "11.17.0",
+    "terraform": "1.15.8",
+    "awsCli": "2.36.23",
+    "claudeCode": "2.1.233",
+    "winget": "1.29.280",
+    "docker": "29.2.1 (present, not required, not used)"
+  },
+  "checks": [
+    {
+      "name": "Windows edition/build readable",
+      "status": "WARN",
+      "detail": "Windows 11 Home 10.0.22631 (23H2) confirmed locally; live Microsoft lifecycle page fetch failed (ETIMEOUT), support-window not independently re-confirmed. See docs/SOURCES.md."
+    },
+    {
+      "name": "Claude Code version / doctor",
+      "status": "PASS",
+      "detail": "2.1.233, doctor reports no installation issues."
+    },
+    {
+      "name": "/goal availability (requires 2.1.139+)",
+      "status": "PASS",
+      "detail": "Installed 2.1.233 exceeds threshold."
+    },
+    {
+      "name": "/loop availability",
+      "status": "PASS",
+      "detail": "loop skill present in this environment."
+    },
+    {
+      "name": "--continue/--resume support",
+      "status": "PASS",
+      "detail": "Both flags present in claude --help output."
+    },
+    {
+      "name": "winget available",
+      "status": "PASS",
+      "detail": "v1.29.280."
+    },
+    {
+      "name": "git required tool",
+      "status": "PASS",
+      "detail": "2.53.0.windows.2."
+    },
+    {
+      "name": "gh required tool",
+      "status": "PASS",
+      "detail": "2.97.0, authenticated to the intended personal account (see docs/FOUNDER_READINESS.md)."
+    },
+    {
+      "name": "Node.js LTS + npm required tool",
+      "status": "PASS",
+      "detail": "24.19.0 confirmed as current Active LTS via nodejs.org; npm 11.17.0."
+    },
+    {
+      "name": "Terraform with S3-native lock support",
+      "status": "PASS",
+      "detail": "1.15.8 installed. Phase 5 confirmed live via WebFetch (developer.hashicorp.com/terraform/language/backend/s3): use_lockfile is current/non-deprecated, requires >= 1.10, DynamoDB-based locking is the deprecated path. Prior PENDING status resolved — see docs/SOURCES.md."
+    },
+    {
+      "name": "AWS CLI v2 required tool",
+      "status": "PASS",
+      "detail": "2.36.23."
+    },
+    {
+      "name": "Docker not installed/used",
+      "status": "PASS",
+      "detail": "Present pre-existing on machine; not installed by this session; not used."
+    },
+    {
+      "name": "ANTHROPIC_API_KEY not set",
+      "status": "PASS",
+      "detail": "Confirmed unset without printing any value."
+    },
+    {
+      "name": "Resolved project path is exactly Documents\\zoryvex, not a symlink",
+      "status": "PASS",
+      "detail": "Verified via PowerShell LinkType (empty = regular directory) and pwd."
+    },
+    {
+      "name": "Repo/folder state inspected, no unexpected files",
+      "status": "PASS",
+      "detail": "Only prior v4.8 binding commit content present; no project-level MCP config yet."
+    },
+    {
+      "name": "AWS Identity Center live state",
+      "status": "PENDING",
+      "detail": "SSO session for zoryvex-admin expired; only a silenced pass/fail probe is permitted (see docs/FOUNDER_READINESS.md); not required until AWS is actually touched (still not touched — no terraform apply this phase either)."
+    },
+    {
+      "name": "Cognito conflict between Prompt 0 text and ADR 0001",
+      "status": "WARN",
+      "detail": "Resolved: ADR 0001 controls, documented in docs/COST_GUARDRAILS.md, docs/DECISIONS.md, docs/RISK_REGISTER.md. Recurred identically in Prompt 5's own text (Cognito User Pool + JWT authorizer) and resolved the same way — see the Phase 5 checks below."
+    },
+    {
+      "name": "Phase 0 overall gate",
+      "status": "PASS",
+      "detail": "PHASE 0 PASSED — all required tool/path checks PASS, non-blocking WARN/PENDING items recorded, zero BLOCKED."
+    },
+    {
+      "name": "Phase 1 Section 1 — CLAUDE",
+      "status": "PASS",
+      "detail": "Claude Code 2.1.233 confirmed, doctor clean."
+    },
+    {
+      "name": "Phase 1 Section 2 — GitHub",
+      "status": "PASS",
+      "detail": "GitHub Free plan confirmed; repo settings verified read-only via gh api; matches target."
+    },
+    {
+      "name": "Phase 1 Section 3 — AWS",
+      "status": "PASS",
+      "detail": "Root MFA/no access keys/alternate contacts confirmed; Identity Center/SSO verified working; billing/cost protections (budget, anomaly monitor) confirmed reused, not duplicated."
+    },
+    {
+      "name": "Phase 1 Section 4 — Vercel domain registrar",
+      "status": "PASS",
+      "detail": "Registrar/nameserver state verified; no DNS records touched; no Vercel project created."
+    },
+    {
+      "name": "Phase 1 Section 5 — Paystack",
+      "status": "PASS",
+      "detail": "Live mode confirmed, Starter Business, payouts enabled, business isolation confirmed. No live checkout/plan/key change made."
+    },
+    {
+      "name": "Phase 1 Section 6 — Contact assets",
+      "status": "PASS",
+      "detail": "WhatsApp/LinkedIn links validated; founder photo processed and metadata-stripped, publication timing later resolved in Phase 4."
+    },
+    {
+      "name": "Phase 2 - Five MCP capabilities",
+      "status": "PASS",
+      "detail": "21st/GitHub/Filesystem/Context7/Playwright configured at project scope, verified, none committed."
+    },
+    {
+      "name": "Phase 3 - Foundation, guardrails, decision docs, CI gate",
+      "status": "PASS",
+      "detail": "Monorepo scaffold, static-export invariant, secret scanner, license check, PreToolUse safety hook, and ci.yml all in place and green (PR #1, #2)."
+    },
+    {
+      "name": "Phase 4 - Complete local product",
+      "status": "PASS",
+      "detail": "Full public marketing site, safe-shell variant, candidate app, employer app, founder/admin console, all against packages/local-adapters. 88/88 Playwright + 79/79 Vitest green. No AWS, no real Paystack/SES touched. Landed via PR #4-#11."
+    },
+    {
+      "name": "Phase 5 - CURRENT-DOC GATE research",
+      "status": "PASS",
+      "detail": "Live-verified (WebFetch/WebSearch, not memory): Terraform S3-native locking (use_lockfile, >=1.10); CloudFront $0 flat-rate plan has no Terraform provider support (open issue #45450, unmerged PR #49235) and doesn't bundle WAF on the Free tier either — both recorded in docs/adr/0003; AWS WAFv2 pricing ($5/ACL + $1/rule + $0.60/M requests); GuardDuty Malware Protection for S3 has no fixed idle charge, plus its exact IAM trust/permissions policy quoted from the live AWS doc; aws_dynamodb_table.deletion_protection_enabled behavior; terraform-provider-aws current version (6.60.0, within pinned ~> 6.0); CloudWatch alarm pricing (10 free, then $0.10/alarm-month). All rows added to docs/SOURCES.md with retrieval dates. This environment's plain CLI (terraform/curl/git) still cannot reach registry.terraform.io/developer.hashicorp.com directly (re-confirmed, same as Phase 0/3) but the assistant's WebFetch/WebSearch tools reached the public internet reliably throughout — noted in docs/SOURCES.md for future phases."
+    },
+    {
+      "name": "Phase 5 - No-Cognito conflict recurrence, resolved",
+      "status": "PASS",
+      "detail": "Prompt 5's 'AUTH AND SECURITY' section named a Cognito User Pool + JWT authorizer, contradicting the binding ADR 0001 (same shape as the Prompt 0 conflict). ADR 0001 controls per CLAUDE.md's explicit override rule; infrastructure/modules/auth implements a Lambda REQUEST authorizer instead. scripts/terraform-policy-check.mjs enforces this as a CI gate (fails if 'Cognito' appears in any .tf file outside a comment), not just a written rule. Recorded in docs/DECISIONS.md and docs/RISK_REGISTER.md."
+    },
+    {
+      "name": "Phase 5 - CloudFront plan / WAF decision",
+      "status": "PASS",
+      "detail": "Pay-as-you-go CloudFront selected over the $0 flat-rate plan (Terraform provider support confirmed absent) and no AWS WAF created at launch (real, sustained fixed cost, not bundled on this path) — full reasoning, risk, and activation trigger in docs/adr/0003-cloudfront-pay-as-you-go-no-waf-at-launch.md."
+    },
+    {
+      "name": "Phase 5 - Terraform module build-out (PR #12)",
+      "status": "PASS",
+      "detail": "New/extended modules: static-site (CloudFront Function route-rewrite/www-redirect, security headers policy, short-TTL HTML cache policy), api-gateway + api-route (split from a single conflated 'api' module mid-phase after recognizing it couldn't support a second route on the same API — see docs/DECISIONS.md), auth (Lambda REQUEST authorizer, no Cognito), data (deletion_protection_enabled/point_in_time_recovery_enabled, true in production), evidence-storage (ownership controls, quarantine/accepted lifecycle, GuardDuty Malware Protection for S3), messaging (SQS+DLQ per queue), observability (CloudWatch alarms + SNS), acm-cert + email-identity (two-stage DNS/ACM/SES, documented in docs/DNS_RUNBOOK.md), ci-deploy-role (GitHub Actions OIDC, one role per environment, least-privilege, explicit deny statements). infrastructure/envs/bootstrap expanded to own every true account-level singleton (GuardDuty detector, OIDC provider, SES identity)."
+    },
+    {
+      "name": "Phase 5 - Deployment/rollback tooling (PR #12)",
+      "status": "PASS",
+      "detail": "scripts/deploy.mjs, release.mjs, rollback.mjs replaced from guarded stubs with real implementations: plan, save the exact plan artifact under .terraform-plans/, require typed environment-name confirmation (production additionally requires the literal word PRODUCTION via release.mjs, the one reviewed entry point .claude/hooks/pre-tool-use.ps1 already names), apply only the saved plan file, smoke-test against /health, and automatically roll back application code (never infrastructure/data) on smoke-test failure. Pure decision logic unit tested (scripts/lib/deploy-lib.test.mjs, 16 tests); scripts/emergency-cost-lockdown.mjs added per docs/COST_GUARDRAILS.md. None of this has been exercised against a real deployment — reviewed, not proven by execution, stated honestly in every relevant file's header and in docs/RUNBOOKS.md."
+    },
+    {
+      "name": "Phase 5 - CI validation gate (PR #12)",
+      "status": "PASS",
+      "detail": "New scripts/terraform-policy-check.mjs (dependency-free, same style as scan-secrets.mjs) checks for forbidden always-on-compute resources, Route 53, Vercel provider, Cognito, public S3 buckets, unencrypted storage, missing prod DynamoDB deletion protection, uncapped CloudWatch log retention, wildcard IAM admin, secret-looking Terraform values, and static AWS keys in GitHub workflows — self-tested against a throwaway fixture with one deliberate violation per category, all caught, fixture removed. Wired into npm run validate:all and CI."
+    },
+    {
+      "name": "Phase 5 - terraform test / mock_provider tried and honestly reverted",
+      "status": "WARN",
+      "detail": "Attempted Terraform's mock_provider framework in CI to satisfy 'plan using mock/safe values' with zero real AWS credentials (none exist yet — the OIDC role this same Terraform defines isn't applied). CI's real run failed: blanket AWS mocking also mocks locally-computed data sources (aws_iam_policy_document, tls_certificate), which this config depends on for every IAM role and the GitHub OIDC thumbprint, both coming back invalid/empty. Fixing it needs an override_data block per policy-document address — judged a fragile, easily-stale maintenance burden not worth it versus what terraform validate (real, comprehensive for this config's actual failure modes, passing) already catches. Reverted honestly rather than left broken or silently dropped — see docs/DECISIONS.md and docs/SOURCES.md for the exact CI error text and reasoning. terraform validate is the achievable, real CI gate for all three environments."
+    },
+    {
+      "name": "Phase 5 - Real CI failures found and fixed before merge (PR #12)",
+      "status": "PASS",
+      "detail": "Two genuine terraform validate errors caught by CI, not guessed: aws_cloudwatch_metric_alarm rejected statistic = \"p99\" (percentile statistics require the separate extended_statistic argument, mutually exclusive with statistic) on two alarms; aws_guardduty_malware_protection_plan was missing the actions { tagging { status = \"ENABLED\" } } block required for the GuardDutyMalwareScanStatus tag the module's own design depends on. Both fixed, verified against current Terraform registry documentation (not re-guessed), CI green on the third run."
+    },
+    {
+      "name": "Phase 5 - Cost model (docs/COST_MODEL.md)",
+      "status": "PASS",
+      "detail": "Sourced 0/10k/50k/100k-registered-user monthly AWS cost table with explicit traffic/MAU assumptions stated as assumptions, not guarantees. Finding: the true idle floor is ~$3/month driven by CloudWatch alarms (30 billable alarms across test+production after the 10 free, at $0.10/alarm-month verified live), not usage — pay-as-you-go compute/storage/CDN costs stay near zero at this scale. Route 53 confirmed $0 (never created). Domain renewal confirmed billed by Vercel, not AWS, out of scope of the AWS table. Cognito listed N/A, not silently folded into another line."
+    },
+    {
+      "name": "Phase 5 - DNS/ACM/SES two-stage workflow (docs/DNS_RUNBOOK.md)",
+      "status": "PASS",
+      "detail": "Stage A (request, acm-cert module validate=false, never blocks) and Stage B (validate=true, attach to CloudFront/API Gateway) documented with exact HUMAN ACTION REQUIRED templates and the final Vercel DNS record table (apex ALIAS, www/test/api/test-api CNAME). Neither stage executed this phase — no DNS record added, no HUMAN ACTION issued yet, per Prompt 5's 'do not change Vercel DNS.'"
+    },
+    {
+      "name": "Phase 5 - Full-suite regression check (PR #12, 3rd CI run)",
+      "status": "PASS",
+      "detail": "CI green: format/lint/typecheck/test (99/99 Vitest, +20 new)/openapi/secrets/terraform-policy/audit/license/build/static-export/bundle-budget/safe-shell build+assert/terraform fmt+validate (bootstrap/test/production) for Validate job; full Playwright e2e+accessibility suite (desktop+mobile) green for the e2e job. No AWS resource created, no terraform apply run, no Vercel DNS changed, no real secret entered at any point in this phase."
+    },
+    {
+      "name": "Phase 6 - Bootstrap review and apply",
+      "status": "PASS",
+      "detail": "Founder caught the original bootstrap plan over-scoping SES/GuardDuty/OIDC/deploy-roles in with true account singletons; corrected to state-bucket-only (4 resources) after 5 founder clarifying questions, applied for real. Versioning/AES256/public-access-block/S3-native-locking all verified live via AWS CLI, not assumed."
+    },
+    {
+      "name": "Phase 6 - Certificate/SES foundation apply",
+      "status": "PASS",
+      "detail": "infrastructure/envs/foundation (new) applied: 2 ACM certs (test CloudFront + test API) + SES domain identity/DKIM/MAIL-FROM/config-set, 6 resources. Both certs initially failed CAA_ERROR (pre-existing non-Amazon CAA records); fixed via terraform apply -replace after founder added 4 Amazon CAA records, live-verified against AWS's own CAA guidance first. Both certs reached ISSUED."
+    },
+    {
+      "name": "Phase 6 - Vercel DNS entry and verification",
+      "status": "PASS",
+      "detail": "13 records entered by founder in small verified chunks after two real chat-truncation incidents (record 2, DMARC) were caught and corrected. All verified via two independent DNS-over-HTTPS resolvers (Google + Cloudflare) plus, for test/test-api, a founder-run isolated-browser check. SES production access requested via the real console flow (no free-text field exists in the current UI) and confirmed enabled (ProductionAccessEnabled=true)."
+    },
+    {
+      "name": "Phase 6 - Test-application Terraform apply",
+      "status": "PASS",
+      "detail": "Full test environment applied (77 resources initial + a 16-add/2-replace fix-up for 3 real bugs found live: unresolvable count-on-computed-value in messaging/evidence-storage/api-gateway modules, this account's 10-total Lambda concurrency limit, and the aws_cloudwatch_metric_alarm cross-region provider limitation for the CloudFront error-rate alarm — deferred and documented, not silently dropped, see docs/DECISIONS.md/RISK_REGISTER.md). A stray static AWS key unrelated to this project was found in the local ~/.aws/credentials [default] profile mid-phase and removed per the founder's explicit instruction after they confirmed 0 root keys/IAM users exist."
+    },
+    {
+      "name": "Phase 6 - Test static site deployed",
+      "status": "PASS",
+      "detail": "scripts/sync-static-site.mjs (new) checksum-syncs apps/web/out to the test S3 bucket, scoped to exactly one bucket with no multi-bucket capability. 190 files uploaded, then re-synced to zero-diff against the exact build that passed the full validate:all pipeline (101/101 Vitest, typecheck, lint, terraform validate/policy, static-export assertion). test.zoryvex.space serves the real site over valid TLS."
+    },
+    {
+      "name": "Phase 6 - Playwright MCP allowed-origins updated",
+      "status": "PASS",
+      "detail": "~/.claude.json's playwright mcpServers.args --allowed-origins updated to the two local fixture origins plus https://test.zoryvex.space and https://test-api.zoryvex.space (verified round-tripped as valid JSON with all other keys intact). MCP itself not reconnected this session (no mcp__playwright__ tools available) — scripts/playwright-origin-guard-check.mjs (new) proved the equivalent restriction directly via the pinned local @playwright/test Chromium build: both test hostnames allowed, both unrelated test origins (example.com, evil-phish.example) blocked. MCP reconnect remains an open item for the next session that uses it."
+    },
+    {
+      "name": "Phase 6 - TEST SECRET ENTRY (Paystack placeholder)",
+      "status": "PASS",
+      "detail": "/zoryvex/test/paystack/secret-key created via Terraform as Standard SecureString with an unusable placeholder value and lifecycle.ignore_changes=[value] (policy-checked clean, no real secret in config/plan/state/output/logs). Founder replaced the value manually in the Console; verified only via metadata (type=SecureString, version 1→2, LastModifiedDate updated) — value never decrypted or echoed. A follow-up terraform plan confirmed zero drift."
+    },
+    {
+      "name": "Phase 6 - TEST ENVIRONMENT ACCEPTANCE",
+      "status": "PASS",
+      "detail": "API health (real 200 through DNS->TLS->API Gateway->Lambda); TLS/DNS (dual-resolver + isolated browser); upload constraints (evidence bucket CORS restricted to PUT-only from exactly https://test.zoryvex.space, BucketOwnerEnforced, public access fully blocked, AES256); queue/DLQ (real send/receive/delete on the webhooks queue, redrive policy confirmed maxReceiveCount=5); email-to-personal-Gmail (real SES send through the zoryvex-space configuration set, founder-confirmed received); backup/restore rehearsal (real on-demand DynamoDB backup, restored to a temp table, verified ACTIVE with matching key schema/GSIs, both cleaned up); spend alarms (SNS->email proven via aws cloudwatch set-alarm-state, founder-confirmed received); emergency-kill (scripts/emergency-cost-lockdown.mjs run for real against test — health confirmed 503 during lockdown, 200 after --restore, no data touched). Auth sign-up/sign-in/reset and tenant isolation explicitly deferred to the backend-implementation phase (founder-confirmed AskUserQuestion decision this phase) — the REQUEST authorizer is deployed and unconditionally fail-closed in the meantime."
+    },
+    {
+      "name": "Phase 6 - Final secret/format/validate sweep",
+      "status": "PASS",
+      "detail": "npm run validate:all green after all changes (101/101 Vitest, lint, typecheck x6 workspaces, OpenAPI, secret scan, terraform policy check [63 files], license check [2 pre-existing non-blocking transitive-dep flags, unrelated to this phase's changes], apps/web build+static-export). scripts/scan-secrets.mjs clean on the full tracked tree; real .tfvars files (containing the AWS account ID and real ARNs) confirmed gitignored, never staged."
+    },
+    {
+      "name": "Phase 7 slice 1 - Passwordless auth, sessions, founder WebAuthn step-up (PR #16)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green (Validate + Playwright e2e/accessibility). NOT an acceptance gate: the real magic-link round trip against live TEST is evidenced separately in the slice 11 rows below."
+    },
+    {
+      "name": "Phase 7 slice 2 - DynamoDB repository layer for remaining domain entities (PR #17)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 3 - Evidence pipeline: presigned upload, malware-scan gate, safe download (PR #18)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 4 - Proof Hiring Kit domain: preview, paid order, Paystack webhook, generation (PR #19)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 5 - Privacy: consent, contact-unlock, export, deletion (PR #20)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 6 - Matching baseline + gated Bedrock explain path (PR #21)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: deterministic matching has never passed a live TEST run (see the matching rows below), and the gated Bedrock path has never been invoked against real AWS. CORRECTED 2026-08-23: the claim that aiMatching stays false in every deployed environment was NOT true of the live TEST environment between 2026-08-18 and 2026-08-23 — see the dedicated feature-flag drift row below. It is true again as of the authorized correction on 2026-08-23. Production has never had a feature-flag parameter at all."
+    },
+    {
+      "name": "Phase 7 slice 7 - Operations and automation (PR #22)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 8 part 1 - Session read + basic entity CRUD (PR #23)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green. NOT an acceptance gate: a merge plus a green CI run evidences only that the code exists and its own tests pass, never that the capability was verified against the live TEST environment."
+    },
+    {
+      "name": "Phase 7 slice 8 part 2 - Real fetch-based API client library (PR #24)",
+      "status": "PASS",
+      "detail": "Implemented — merged to main, CI green (run 32297879267). NOT an acceptance gate: this shipped the client library plus one additive page; the candidate journey was wired to the real backend later by PR #48, and only that journey has since been verified live."
+    },
+    {
+      "name": "Phase 7 slice 9 - CI-driven deploy pipeline (OIDC provider + ci-deploy-role instantiation + deploy workflow job)",
+      "status": "PASS",
+      "detail": "Independently verified live — this is one of the few slice rows with real evidence behind it, because the pipeline has repeatedly performed real deploys. Merged PR #25 (prerequisite: isolate SecureString parameters from the CI-managed stack), #27 (OIDC provider + test ci-deploy-role, code only), #29 (gated deploy-test CI job, OIDC, no static keys), #30 (trust immutable GitHub OIDC subject), #31 (real deployment config to CI deploy-test), #33/#34/#35/#36 (four rounds of least-privilege IAM fixes for the plan/apply/refresh permissions the role actually needed, ending with scoped event-source-mapping tag actions instead of a wildcard). Two incidental deploy.mjs robustness fixes landed alongside (#26 ENOBUFS on large plans, #28 fresh-runner-safe backend init). Deploy pipeline is now live and proven for real, repeatedly: CI-triggered runs (e.g. run 32465686860 for PR #41) assume arn:aws:iam::<AWS_ACCOUNT_ID>:role/zoryvex-test-deploy via OIDC with zero static keys, run a fresh terraform plan/apply, and pass a real /health smoke test every time."
+    },
+    {
+      "name": "Phase 7 slice 10 - PARTIAL, not complete (load, quota, and full test-suite pass) (PR #37)",
+      "status": "PENDING",
+      "detail": "Three distinct facts, deliberately separated so this slice is never read as finished. (a) IMPLEMENTED, CI-green: PR #37 merged, adding scripts/lib/load-quota-model.mjs (a deterministic, zero-AWS-call synthetic model of the 10k/50k/100k registered-user tiers, checked against the real configured API Gateway throttle — rate 25/s, burst 50 — and this account's 10-execution Lambda ceiling), scripts/load-quota-check.mjs, and the two genuinely missing regression suites (SQS and SES) identified by inventorying all 49 existing services/api test files. (b) REQUESTED BUT UNCONFIRMED: an AWS Lambda reserved-concurrency quota increase (10 -> 1001) was requested and a case opened as part of this slice; it has never been polled or confirmed since, and MUST NOT be polled without separate founder authorization. (c) NOT COMPLETE as a slice: the plan's own step 10 requires demonstrating that reserved concurrency and API throttling bound runaway cost, and that target load meets the documented SLO POST-QUOTA-INCREASE. None of that has been demonstrated, and PR #37 says so itself — all 37 Lambdas run at reserved_concurrent_executions = -1, so there is no reserved concurrency to demonstrate; no documented SLO exists anywhere in this repo to measure against; and the single opt-in live probe was attempted once, blocked by the permission classifier, and never run. The synthetic model is a real and useful artifact, but it is a model, not a live load test. Slice 10 is therefore PARTIAL."
+    },
+    {
+      "name": "Phase 7 slice 11 - Deploy + verify + wrap-up (real TEST acceptance)",
+      "status": "PASS",
+      "detail": "COMPLETE as of 2026-08-26 — every gate this slice defined is now independently verified live against the real TEST environment (not a build/compile alone), each with its own dedicated row below: read-only acceptance gate; real passwordless magic-link auth round trip, reached only after three runtime defects discovered in TEST were found and fixed one at a time (PR #38/#39/#40/#41); real evidence-file upload -> malware-scan-clean -> authorized download -> SHA-256 integrity match; EICAR fail-closed; privacy export; privacy deletion; deterministic matching; and the Proof Hiring Kit order/webhook/generation flow (three further real defects found and fixed 2026-08-26: CORS, Paystack reference format, Paystack Dashboard webhook misconfiguration). This slice's own completion does NOT mean Phase 7 overall is PASSED — slice 10 remains separately PARTIAL for unrelated reasons (load/quota acceptance), tracked in its own row."
+    },
+    {
+      "name": "EVIDENCE TAXONOMY (applies to every Phase 7 row below and to docs/DEPLOYMENT_STATUS.md)",
+      "status": "PASS",
+      "detail": "Adopted 2026-08-23 so that no reader can mistake a merged PR, a green CI run, or a PR author's own description for a passed acceptance test. Exactly six buckets: (1) Implemented — code/infra exists, not deployed or exercised; (2) Deployed to TEST — live in AWS, not exercised; (3) Independently verified live — a real acceptance test passed, evidence cited; (4) Attempted, failed — a real run happened and failed, evidence cited; (5) Unconfirmed - evidence missing — a claim exists with no independent verification; (6) Not yet tested — nothing attempted. This state file's own 'status' field is constrained by .zoryvex/state.schema.json to PASS/WARN/BLOCKED/PENDING, so the taxonomy bucket is always stated in words inside 'detail' and is authoritative over the enum value. Read this carefully: the PASS/WARN/BLOCKED/PENDING enum is a WORKFLOW-TRACKING field, not an acceptance-evidence field. A row with status PASS whose detail says 'Implemented' has NOT passed a real test — it only means that unit of work is done and not blocking. Never infer acceptance from the enum."
+    },
+    {
+      "name": "Phase 7 - PRs #42-#61 merged to main (2026-08-21 to 2026-08-22)",
+      "status": "PASS",
+      "detail": "Implemented and merged (this row records merge, NOT acceptance). Exactly 20 PRs, #42 through #61 inclusive, all merged with green CI, all verified present as commits on main; HEAD is 9c64f59. Tooling/verification: #42 EICAR verifier fixed (quarantine/ prefix + stdin streaming). IAM: #43 privacy-deletion-worker GSI1 Query grant, #44 matches-recompute GSI1 Query grant, #56 auth-session Lambda DynamoDB/SSM grant. Frontend auth: #45 added the missing /auth/callback page, #47 honest success state on it, #46 CSP fix allowing Next static hydration. Product: #48 wired the candidate journey to the real backend. Copy/design: #49, #50 removed AI-writing tells and codified the standard. Client robustness: #51 CSRF token recovered on page load, #52 fictional-data banner accurate in real mode, #53 transient session-failure and autosave-race fixes, #54 real error feedback on failed mutations, #55 never hang on a failed data load. Test-only: #58 admin sign-in redirect headroom. The four live-use defects #57/#59/#60/#61 are recorded in their own row below."
+    },
+    {
+      "name": "Phase 7 - Four live-use defects found and fixed 2026-08-22 (PR #57, #59, #60, #61)",
+      "status": "PASS",
+      "detail": "Independently verified live (fixes confirmed against the deployed artifact on 2026-08-23, not merely merged). All four are CLOSED, not open. (1) PR #57 stopped attaching x-zoryvex-csrf to GET requests, which triggered a preflight CORS then blocked. (2) PR #59 made deploy actually sync apps/web/out to S3 (sync-static-site.mjs wired into deploy.mjs) — previously terraform apply alone left the site stale; verified live by Last-Modified: Sat, 22 Aug 2026 19:24:28 GMT on test.zoryvex.space, inside the Deploy (test) window 19:17:14-19:26:46 of CI run 32592992725. (3) PR #60 set NEXT_PUBLIC_API_BASE_URL in the deploy build step, fixing the regression #59 introduced that silently reverted the live site to local-fake mode; verified live by the shipped bundle /_next/static/chunks/3bvouaq07d0qu.js containing test-api.zoryvex.space and the served CSP allowing connect-src https://test-api.zoryvex.space. (4) PR #61 allow-listed x-zoryvex-csrf and PATCH/DELETE in the API Gateway CORS config; verified live by a real OPTIONS preflight to test-api.zoryvex.space/candidates/me returning 204 with access-control-allow-methods DELETE,GET,OPTIONS,PATCH,POST and access-control-allow-headers authorization,content-type,x-zoryvex-csrf."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - Live TEST candidate journey (sign-in, onboarding, profile load, profile save)",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-22, on test.zoryvex.space by the founder in a real browser (not a build, not CI): candidate sign-in, AWS cloud onboarding, profile loading, and profile saving all confirmed working against the real TEST backend. Corroborated independently on 2026-08-23 by direct read-only DynamoDB evidence: CANDIDATE#8364549a-1aa6-41b2-b51a-c72bd83dd03c PROFILE carries updatedAt 2026-08-22T19:36:14.113Z, ten minutes after that day's final deploy completed (19:26:46) and after the CORS fix went live — i.e. a real profile save landed in the real table."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - GSI1 index permission fix (PR #43/#44) deployed to TEST",
+      "status": "PASS",
+      "detail": "Deployed to TEST and independently verified live, 2026-08-23, against deployed IAM state rather than Terraform source. aws lambda get-function-configuration resolved both roles; aws iam get-role-policy returned, for BOTH zoryvex-test-matches-recompute-exec and zoryvex-test-privacy-deletion-worker-exec, a ScopedTableAccess statement whose Resource list contains the GSI1 index ARN alongside the base zoryvex-test-core table ARN. Both policies retain the explicit Deny on organizations:*/iam:*/account:*. Corroborated by CloudWatch: log group /aws/lambda/zoryvex-test-matches-recompute shows the pre-fix AccessDeniedException on dynamodb:Query against /index/GSI1 at 2026-08-21 13:13:33 UTC (stack ending at listDiscoveryOptedCandidates), and a clean error-free invocation at 2026-08-21 14:08:30 UTC after the fix. NOTE: this row certifies the PERMISSION only. It does not certify that matching or deletion works — see the two rows below."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - Deterministic matching against live TEST",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-26. Real end-to-end path, no forged session: founder signed in as employer (zerahabba9@gmail.com, real magic-link round trip) creating account b6d248c4-3b2b-41ab-bab2-bf5399cf3172 (role employer_admin, createdAt 2026-08-25T20:12:45.246Z, verified via DynamoDB GetItem); created role ROLE#8b460042-a6a0-476c-a3a0-b757f0931c20 (title 'aws', launchTrack aws_cloud, mustHaveWork=['a']) via the real API; clicked Recompute matches. Verified via DynamoDB Query on the role's partition: a real MATCH item exists, MATCH#8364549a-1aa6-41b2-b51a-c72bd83dd03c, matchScore=0, rationale='\"a\": no supporting evidence found.', scoringVersion=v1, createdAt=2026-08-26T06:35:04.895Z. Hand-verified against services/api/src/domain/matching-service.ts's actual algorithm BEFORE trusting the UI: tokenize('a') filters tokens under 3 chars, producing an empty requirement-token set; overlapFraction returns 0 immediately whenever requirementTokens.size===0, so the 'a' requirement can never match any evidence regardless of its content — matchScore = 0/1 = 0 and the exact rationale string are the correct, deterministic output for this (low-quality test) input, not a defect. The candidate (8364549a) was independently confirmed still discovery-opted on aws_cloud (GSI1PK=TRACK#aws_cloud) immediately before the run. This closes the matching gate; a higher-quality match score was not the point — the gate is that recompute genuinely stores a fresh, explainable, deterministic score for a real opted-in candidate against a real role, which it does."
+    },
+    {
+      "name": "Phase 7 slice 11 - Matching test fixtures no longer exist in TEST",
+      "status": "WARN",
+      "detail": "Recorded as fact 2026-08-23, correcting PR #44's statement that the synthetic role/candidate/evidence set 'remains valid and preserved, ready to reuse for the retest'. At that point zoryvex-test-core held ZERO ROLE#/EMPLOYER#/MATCH# items and every surviving CANDIDATE# had discoveryOptIn=false. SUPERSEDED 2026-08-26: real employer/role/match fixtures now exist again, created fresh through the real UI (not restored) — see the Deterministic matching gate row above, now PASS. This WARN is kept for its historical record of the 2026-08-21-to-23 gap, not as current state."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - Privacy deletion against live TEST (candidate profile + match path)",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-25 — the retest PR #43's grant was waiting on. Method: rather than driving this through a live authenticated HTTP session (blocked in this environment — see the network-reachability blocker row below), the real SQS-triggered deletion-worker Lambda was exercised directly, which is the actual unit the GSI1 fix protects. A synthetic isolated fixture was written directly to zoryvex-test-core matching docs/DATA_MODEL.md exactly: CANDIDATE#<id>/PROFILE (email under the reserved example.invalid TLD, discoveryOptIn false) and ROLE#<roleId>/MATCH#<id> with GSI1PK=CANDIDATE#<id>/GSI1SK=MATCH#<roleId> (access pattern #24, the same GSI1 index PR #43 fixed). Baseline confirmed both items existed and a GSI1 query found the match before any run. One real SQS SendMessage ({\"candidateId\":..,\"requestedAt\":..}) was sent to zoryvex-test-deletion. CloudWatch confirms a clean invocation (RequestId 3b1b9d99-d577-5c46-9158-fe9ea56064cf, 952ms, no ERROR/exception lines, no AccessDeniedException). Post-run DynamoDB reads confirm both items gone (GetItem empty, GSI1 query zero results) and a real AUDIT# item was appended (action=candidate_deleted, targetId=the fixture candidateId, createdAt matching the invocation window, found via a live GSI3 query). Both zoryvex-test-deletion and its DLQ show ApproximateNumberOfMessages=0 afterward — no retry, no dead-letter. HONEST SCOPE LIMIT: this fixture had zero Evidence/EvidenceFile items, so deleteEvidence/deleteS3Object were never exercised (empty loops) — this run proves the match-deletion, profile-deletion, session/account no-op, and audit-append steps, and specifically proves the previously-broken GSI1 query now works for real, but does NOT prove the S3 evidence-object deletion sub-path, which needs direct S3 access this environment cannot reach (see the network blocker row). Export is now separately verified live — see the dedicated row below."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - Privacy export against live TEST (self-service data export)",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-25. Unlike deletion, export (services/api/src/domain/privacy-service.ts's exportCandidateData) is a pure read with no DynamoDB write and no audit-event trail — so verification is CloudWatch-Logs evidence, not a DynamoDB before/after. The founder signed in as a candidate on test.zoryvex.space (real magic-link round trip, the human action Phase 7's matching/export gates were blocked on) and, separately, saved a real profile edit — independently confirmed via CANDIDATE#8364549a-1aa6-41b2-b51a-c72bd83dd03c/PROFILE showing updatedAt 2026-08-25T17:43:54.053Z, freshly changed from its prior value. The founder then clicked 'Download my data' on the real account page; CloudWatch confirms a clean invocation of /aws/lambda/zoryvex-test-privacy-export at 2026-08-25T17:49:51.363Z (RequestId ef28035e-f6ef-423a-ba29-b04d02f0a656, 765ms, START/END/REPORT only, no error). This is a real authenticated session (not forged, not a fabricated authorizer context) exercising the real deployed export path end-to-end. Matching remains blocked: discoveryOptIn is still false for all three surviving CANDIDATE# profiles, and zero EMPLOYER#/ROLE# items exist — the founder has not yet created an employer account or a role, which matching additionally requires beyond just being signed in."
+    },
+    {
+      "name": "Phase 7 - This environment's AWS network reachability (discovered 2026-08-25, revised same day)",
+      "status": "PASS",
+      "detail": "Revises the earlier same-day WARN row: the S3/Lambda gap was an addressing-style artifact, not a hard block, and is now routed around. This Bash sandbox can reach the bare regional control-plane endpoints (sts, iam, ssm, dynamodb, sqs, logs, acm, s3, lambda — all *.amazonaws.com without a bucket/resource name prepended), github.com/api.github.com, and the RAW AWS-generated execute-api URL (confirmed live, real 200 on /health). It CANNOT reach virtual-hosted-style per-resource subdomains (<bucket>.s3.<region>.amazonaws.com instant-fails) or this project's own custom domains (test.zoryvex.space, test-api.zoryvex.space — genuine external DNS resolution failure, curl exit 6, unrelated to AWS addressing and not fixed by any endpoint override). FIX FOUND: setting AWS_ENDPOINT_URL_S3 (and analogously AWS_ENDPOINT_URL_LAMBDA) to the bare regional endpoint forces path-style addressing and fully restores S3 and Lambda control-plane access, with zero script modification needed — confirmed by running scripts/verify-evidence-eicar-fail-closed.mjs completely unmodified (see the EICAR row) and by a successful aws lambda get-function-configuration call. monitoring.*.amazonaws.com (CloudWatch) and apigateway.*.amazonaws.com were not retested with this fix but are presumed likely fixable the same way if ever needed. Practical consequence: EICAR is now unblocked and passed for real. Lambda being reachable does NOT unblock matching/export — those need a real authenticated session (API Gateway's REQUEST authorizer verifying a real magic-link-issued session), and invoking the Lambda directly would require fabricating that authorizer context, which was deliberately declined as the same class of security-boundary bypass as forging an auth token. The custom-domain frontend remains genuinely unreachable from this environment regardless."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - EICAR fail-closed evidence rejection",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-25, superseding the prior WARN. This session's Bash sandbox cannot reach S3's virtual-hosted-style bucket subdomains (<bucket>.s3.<region>.amazonaws.com) at all, but CAN reach the bare regional endpoint (s3.<region>.amazonaws.com) — setting AWS_ENDPOINT_URL_S3=https://s3.eu-west-1.amazonaws.com forces path-style addressing and routes around the gap without modifying any script. Ran scripts/verify-evidence-eicar-fail-closed.mjs, unmodified, exactly as designed: --bucket zoryvex-test-evidence-scan-eicar-<AWS_ACCOUNT_ID> (the isolated test bucket, name-pattern-checked by the script's own isIsolatedEicarBucketName guard before it would run at all). Real result, captured directly, not a PR self-report: 'PASS: GuardDuty correctly flagged the EICAR test file as THREATS_FOUND.' Object key quarantine/eicar-test-1787666120142-dcm2f2, streamed via stdin only (never written to local disk), deleted immediately after (S3 DeleteObject on a versioned bucket — this created a delete marker, VersionId koty72IxeBz__9Dw2_UTSurjbFdTthPU; a subsequent HeadObject on the key returns 404, confirming the object is gone from current view, though — noted for full honesty — the prior version remains in the bucket's version history per standard S3 versioning semantics, same as every other object in this bucket, not a residual live threat). The real evidence bucket (zoryvex-test-evidence, distinct from the isolated eicar bucket) was never touched. This same AWS_ENDPOINT_URL_S3 approach also revealed that lambda.<region>.amazonaws.com is reachable the same way (tested: aws lambda get-function-configuration succeeded) — deliberately NOT used to invoke matches-recompute or export directly, since doing so would require fabricating a requestContext.authorizer object asserting a session that was never actually verified by anyone, the same security-boundary concern that already ruled out forging an auth token for those two gates. Network reachability for S3/Lambda control-plane is resolved; the matching/export gates remain blocked for the separate, unrelated reason of needing a real human email-check to obtain a genuine session — see the two rows immediately following and the blockers array."
+    },
+    {
+      "name": "Phase 7 slice 11 gate - Proof Hiring Kit order/webhook/generation",
+      "status": "PASS",
+      "detail": "Independently verified live, 2026-08-26. Three real, sequential defects found and fixed, none guessed: (1) CORS missing idempotency-key in API Gateway's allow-headers, blocking every request before it reached the backend at all (fixed in infrastructure/modules/api-gateway/variables.tf, deployed as ff70063, confirmed live via aws apigatewayv2 get-api). (2) Paystack rejecting the roleId:kitOrderId reference for its colon ('Invalid character in transaction reference', HTTP 400) — confirmed by replicating the exact POST to api.paystack.co/transaction/initialize directly using the already-verified TEST secret key (never printed); CloudWatch showed nothing because services/api/src/adapter/http.ts maps a handled AppError to a JSON response without console.error by design. Fixed by switching the separator to '.' in kit-service.ts and paystack-webhook-service.ts's parseReference (deployed as 432d523, Plan summary +0~2-0 matching the two changed Lambdas). (3) After both code fixes deployed, a real payment succeeded on Paystack's side (independently confirmed via a direct read-only transaction/verify call: status=success, domain=test, NGN 29,000, paid 2026-08-26T07:50:54Z, corroborated by the founder's own Paystack receipt email) but no deliverables appeared, because the Paystack Dashboard's Test Webhook URL was set to https://Zerah.com, never our real endpoint — a pure account-configuration gap, invisible to any test or scan in this repository, matching the long-carried-forward 'Paystack non-secret dashboard verification' item. Founder corrected it to https://test-api.zoryvex.space/webhooks/paystack (no code/infra change). One further real checkout then closed the loop end to end, independently verified via DynamoDB: KITORDER#aa2340a5-289d-439d-b4f5-08793494c5ca transitioned pending -> succeeded; the webhook Lambda logged one clean invocation (RequestId 093c78f7-47a0-4af7-a088-274ea6dc0faa, 1983.87ms, consistent with the independent server-to-server verify call Phase 8 added); KITARTIFACT#00001 was generated (4,710 characters of real HTML, generatedAt 2026-08-26T08:08:47.680Z, ~15s after the order succeeded). Full defect-by-defect reasoning in docs/DECISIONS.md's three 2026-08-26 entries. Never touched live Paystack throughout — the TEST secret key's sk_test_ prefix was reconfirmed before diagnosis began. The 16 stray pending KitOrder items from the failed attempts are harmless test debris, left uncleaned (same category as the existing 145+ unreconciled TEST records, cleanup stays selective)."
+    },
+    {
+      "name": "Phase 7 slice 11 - No dead-letter/failure-queue residue in TEST",
+      "status": "PASS",
+      "detail": "Independently verified live 2026-08-23, correcting an earlier suspicion that the 2026-08-21 failed deletion run had left a dead-lettered message behind. aws sqs get-queue-attributes returns ApproximateNumberOfMessages=0 and ApproximateNumberOfMessagesNotVisible=0 for all four of zoryvex-test-deletion, zoryvex-test-deletion-dlq, zoryvex-test-evidence-processing and zoryvex-test-evidence-processing-dlq. Separately noted, not a defect but not yet reconciled: zoryvex-test-core holds 145 accumulated TEST records (53 rate-limit windows, 36 auth tokens, 25 account items, 22 sessions, 5 audit events, 4 candidate items) that no gate has ever cleaned up. These are TEST-environment records, none of it production data, and not all of it synthetic — CANDIDATE#8364549a-1aa6-41b2-b51a-c72bd83dd03c is the founder's own real TEST candidate profile from the 2026-08-22 browser journey, so any future cleanup must be selective, never a blanket wipe. Recorded once here and once in docs/DEPLOYMENT_STATUS.md's Data row; they describe the same 145 items and must not be counted twice."
+    },
+    {
+      "name": "Phase 7 - TEST frontend /auth/callback (supersedes the earlier 404 finding)",
+      "status": "PASS",
+      "detail": "Independently verified live 2026-08-23: apps/web/app/auth/callback/page.tsx exists (added by PR #45, honest success state by PR #47) and GET https://test.zoryvex.space/auth/callback returns 200. The prior '404 — open, separately tracked' record is stale and is corrected here. One minor open item preserved: the trailing-slash variant /auth/callback/ returns 404, which is site-wide CloudFront route-rewrite behavior (/candidate/profile returns 200 while /candidate/profile/ returns 404) rather than an auth defect — worth confirming the magic-link email builds the URL without a trailing slash before real users rely on it."
+    },
+    {
+      "name": "Phase 7 - TEST feature-flag drift found and corrected (aiMatching/contactUnlocks)",
+      "status": "PASS",
+      "detail": "Attempted, failed then Independently verified live — a real defect found and fixed, TEST only. FOUND 2026-08-23: the live parameter /zoryvex/test/feature-flags held {\"aiMatching\":true,\"contactUnlocks\":true} — two keys only, contradicting both the source-controlled four-key document (packages/config FeatureFlagsSchema, all four flags default false; infrastructure/envs/test/main.tf's jsonencode of payments/aiMatching/publicDiscovery/contactUnlocks all false) and the plan's rule that aiMatching stays off until the AI evaluation gate passes. TIMELINE from aws ssm get-parameter-history: v1 2026-08-18T23:35:20+01:00 wrote {\"aiMatching\":false,\"contactUnlocks\":false} (the two-key shape scripts/emergency-cost-lockdown.mjs writes); v2 2026-08-18T23:36:09+01:00, 49 seconds later, flipped both to true; v3 2026-08-20T12:00:32+01:00 rewrote the same true values. So the flags were true for roughly four days, from 2026-08-18 until corrected. ATTRIBUTION, stated exactly as far as the evidence goes: all three writes were made under the founder's SSO AdministratorAccess assumed role. AWS parameter history cannot distinguish a human typing a command from an authorized local agent (for example a Claude session) issuing it under that same assumed role, so this record does NOT assert who acted. Most probable reconstruction, not proven: the Phase 6 emergency-cost-lockdown rehearsal wrote the all-false lockdown document, and the follow-up 'set them back' step (the script deliberately does not restore flags itself) set them to true instead of to the source default false. NO HARM OCCURRED: the only code path reading aiMatching is bedrock-explain-service.ts:185, and its Lambda's log group /aws/lambda/zoryvex-test-matches-explain holds 0 bytes with 0 log streams, so the Bedrock path was never invoked — no model call, no spend, no AI output ever reached a human. contactUnlocks is read by no code in services/api at all. CORRECTED 2026-08-23 by one bounded, founder-authorized aws ssm put-parameter against /zoryvex/test/feature-flags only: version 3 -> 4 at 2026-08-23T13:39:24.819+01:00, now {\"aiMatching\":false,\"contactUnlocks\":false,\"payments\":false,\"publicDiscovery\":false}, all four keys present and all exactly false, matching source control. No Terraform, no deploy, no Lambda restart, nothing production, nothing Paystack. Production was never in scope: no /zoryvex/production/* parameter exists in this account at all."
+    },
+    {
+      "name": "Phase 7 - Production and live Paystack remain untouched",
+      "status": "PASS",
+      "detail": "Verified 2026-08-23 at the code/CI/git level. .github/workflows/ci.yml references production exactly twice (lines 96-97) and only as terraform validate — there is NO production apply job; the sole deploy job is Deploy (test), gated to push events on refs/heads/main, assuming the test-scoped OIDC role with zero static keys. PRs #43/#44 mirrored production config without applying it. No DNS change appears in recent history; Vercel stays registrar/DNS-only. Exactly one file in the repo references api.paystack.co — scripts/paystack-test-plan.mjs — and it hard-refuses to run unless the key is present AND starts with sk_test_; services/api/handlers/webhooks/paystack.ts only verifies inbound signatures and makes no outbound call. Honest limitation: this was NOT independently confirmed against AWS itself, since no production-scoped AWS read was performed."
+    },
+    {
+      "name": "Phase 7 - dynamodb_index_arns read-only audit (admin_exceptions_route, roles_list_route)",
+      "status": "PASS",
+      "detail": "Read-only audit completed 2026-08-25 before any write: traced every Lambda handler issuing a DynamoDB Query against a GSI and compared it to the dynamodb_index_arns each Terraform module block actually passed. Found the same defect class already fixed once for privacy_deletion_worker/matches_recompute_route (PR #43/#44, GSI1): admin_exceptions_route queries GSI3 (audit-event-repository.ts's listRecentAuditEvents) and roles_list_route queries GSI2 (role-repository.ts's listRolesByEmployer), and neither module block passed any dynamodb_index_arns, so both Lambdas' IAM roles held base-table access only. No write made during the audit itself."
+    },
+    {
+      "name": "Phase 7 - GSI2/GSI3 permission fix for admin_exceptions_route/roles_list_route (PR #63)",
+      "status": "PASS",
+      "detail": "Independently verified live in TEST, 2026-08-25 (not merely merged). Implementation: branch fix/dynamodb-index-arns-admin-roles-20260823 off main@86aea3a, commit ed89fd8, added core_table_gsi2_arn/core_table_gsi3_arn locals plus one dynamodb_index_arns line each to admin_exceptions_route (GSI3) and roles_list_route (GSI2), mirrored in both infrastructure/envs/test/main.tf (+15) and infrastructure/envs/production/main.tf (+14, source mirrored only, not applied). Validation before merge: terraform fmt -check clean, terraform validate Success for both envs, terraform-policy-check.mjs clean (71 files), scan-secrets.mjs clean, zero account-ID/wildcard matches in the diff. PR #63 opened, CI green (Validate + Playwright success, Deploy correctly skipped on the PR event), squash-merged to main as 9d7bc6c. Deploy (test) run 32831540900 then executed for real: Plan summary +0 ~39 -0, terraform apply succeeded, apps/web synced to S3 (164 uploaded/3 deleted), smoke test against /health passed. Independently re-verified directly against live AWS IAM (not the deploy log): aws iam get-role-policy on zoryvex-test-admin-exceptions-exec and zoryvex-test-roles-list-exec now each return a ScopedTableAccess Resource list of exactly [base table ARN, correct single GSI ARN] — GSI3 for the first, GSI2 for the second, no wildcard, no unrelated table. No production apply occurred; only the Deploy (test) job ran (confirmed no production job exists in this workflow at all)."
+    },
+    {
+      "name": "Phase 7 - Lambda build/zip non-determinism fix independently confirmed live, twice (PR #66)",
+      "status": "PASS",
+      "detail": "Root cause confirmed empirically: yazl's zipFile.addFile() stamps each zip entry with the bundle file's own filesystem mtime unless an explicit mtime option is passed (yazl/index.js:432); services/api's bundle .mjs files are freshly written by esbuild on every build, so their mtime differs every time even when esbuild's actual JS output is byte-identical (verified: hashed services/api/dist/health.mjs across two independent builds, identical hash; the resulting .zip, different hash, before the fix). Fixed in scripts/build-lambda.mjs by pinning a fixed date (1980-01-01, yazl's DOS-date floor) as the mtime for every zip entry. Verified locally: all 37 handler zips byte-identical (sha256sum) across two independent full rebuilds, where every single one differed before the fix. Verified live, independently, twice: the one-time transition deploy (PR #66's own merge, run 32843338437) correctly showed Plan summary +0 ~37 -0 (the zips' bytes genuinely changed that one time, since the build process itself changed); the next two docs-only deploys after that (PR #67's merge, run 32846921364, and PR #68's merge, run 32848151490) both produced Plan summary +0 ~0 -0, a completely empty plan, where every prior docs-only deploy this session had shown ~37 or ~39 in-place changes. Fully closed."
+    },
+    {
+      "name": "MLOps role-taxonomy amendment - schema/taxonomy foundation + marketing copy (PR #69, #70)",
+      "status": "PASS",
+      "detail": "Founder's MLOps role-taxonomy amendment (2026-08-25) integrated as one new mlops LaunchTrackSchema value (packages/contracts/src/domain.ts) plus a new canonical, versioned taxonomy module (packages/contracts/src/mlops-taxonomy.ts: MLOPS_ROLE_TITLE_ALIASES, MLOPS_CAPABILITY_AREAS with stable ids, MLOPS_NON_ALIAS_TITLES, MLOPS_CAPABILITY_AREAS_REQUIRING_SPECIFIC_EVIDENCE) — one structural track, not four, full reasoning in docs/DECISIONS.md's 2026-08-25 entry and docs/PHASE_REGISTER.md. Additive/backward-compatible, no migration: npm run typecheck clean across every workspace (the sole strict Record<LaunchTrack,string>, LAUNCH_TRACK_LABELS, forced exactly one other required edit, already made), npm test green 481/481, npm run validate:all green. PR #69 merged and deployed to TEST (run 32849960380, deploy succeeded, real Lambda-hash changes this time since services/api bundles @zoryvex/contracts). PR #70 (separate, real-user-facing) updated the six marketing-copy surfaces (homepage x2, /for-talent x2, /founder, root layout meta description, site footer) that named the three tracks in prose, so the public site stays truthful — merged and deployed (run 32851373950, succeeded). Deliberately NOT built this session as optional future enhancement rather than a closing functional gap (checked and confirmed each already works via the existing generic LaunchTrack-based code with zero further change, or is out of scope): structured per-claim evidence tagging by capability-area id, employer candidate search/filter UI (does not exist for any track today), Kit-checklist taxonomy autocomplete, and an mlops example role/candidate fixture in packages/local-adapters (declined specifically to avoid disturbing the three existing fixtures' precision-built 5/4/0-match marketplace-gate test design). docs/ACCEPTANCE_CRITERIA.md checked and confirmed to need no change — its criteria are already track-agnostic."
+    },
+    {
+      "name": "GitHub Actions minute budget — CI optimized to skip Playwright/Deploy for docs-only changes (PR #73)",
+      "status": "PASS",
+      "detail": "Founder reported 1900 of 2000 GitHub Actions free-tier minutes used, resetting in 7 days, and gave a binding instruction to preserve a strict maximum of 10 additional workflow runs from that point forward. Response: added a changed-paths job to .github/workflows/ci.yml that diffs the push/PR against its base commit; when every changed file is under docs/, .zoryvex/, or is a root-level *.md file, the e2e (Playwright, ~5-7 min) and deploy-test (~8-13 min) jobs are skipped — validate (~2 min) always runs regardless, since it's cheap and catches real issues (this session found a real leaked-account-ID and a real prettier failure in docs/state files before commit). Fails open to full CI whenever the base commit can't be determined (force-push, new branch, first push). PR #73 (not docs-only, since it touches the workflow file itself) proved both paths live: the PR-check run correctly did NOT skip e2e (non-docs-only), and after merge, CI ran in full including Deploy (test), which succeeded. This session's ~7-8 prior docs-only PRs each cost roughly 26-40 minutes (2 runs x ~13-20 min for e2e+deploy); going forward each docs-only commit costs only ~2 x ~2 min for validate alone."
+    },
+    {
+      "name": "Phase 8 - Paystack test-mode payment slice (initialize/verify/webhook/entitlement)",
+      "status": "PASS",
+      "detail": "Implemented, TEST mode only, exactly the founder's eight-point amendment scope, no more. New services/api/src/lib/paystack-client.ts (initializePaystackTransaction/verifyPaystackTransaction — the only two outbound Paystack calls in this codebase). kit-service.ts's requestKitOrder now calls initialize for real, returns a genuine authorizationUrl. paystack-webhook-service.ts now independently verifies status/reference/currency/amount via a second server-to-server call before granting any entitlement (previously trusted the webhook body's own claims alone) — a verify mismatch marks the order failed and alerts; a verify-call failure (Paystack unreachable) leaves the order pending and alerts, deliberately not thrown (would interact badly with the early, uniform recordWebhookEventOnce idempotency check and permanently strand the order). apps/web's checkout page redirects to the real Paystack hosted checkout when NEXT_PUBLIC_API_BASE_URL is configured. Terraform: kit_create_order_route granted secure_ssm_parameter_arns/PAYSTACK_SECRET_KEY_PARAM (same pattern the webhook route already used) plus APP_ORIGIN, mirrored in test (applied via CI) and production (source-only, not applied). Deliberate scope boundary, not an oversight: the role page's Kit-status display stays local-fake-only (not one of the eight points; entitlement is still correctly granted server-side regardless). Full reasoning in docs/DECISIONS.md's 2026-08-25 entry and docs/PAYMENTS.md's new Implementation-status section. Verified before merge: npm run typecheck clean across every workspace, npm test green 490/490 (+9 new), terraform fmt/validate clean both envs, terraform-policy-check.mjs clean (71 files), scan-secrets.mjs clean. NOT yet independently verified live — exercising this for real needs a real authenticated employer session, the same human email-check blocker as Phase 7's matching/export gates."
+    },
+    {
+      "name": "Employer sign-in wired to real backend, closing the actual matching blocker (2026-08-25)",
+      "status": "PASS",
+      "detail": "While walking the founder through the matching gate's human email-check, discovered the real blocker was NOT just the email-check: apps/web/src/components/auth/SignInForm.tsx had useReal restricted to intendedRole==='candidate' only — employer sign-in had never been wired to the real backend at all (a pre-existing, already-commented, deliberate scope boundary from earlier work, not a regression). No employer could ever get a real session through the UI. Fixed, scoped tightly: SignInForm.tsx now includes employer (maps to employer_admin; founder_admin stays local-fake, separate WebAuthn path). /auth/callback offers employers a 'Create a role' link. /employer/roles/new now calls the already-existing (never previously used) realRoles.createRole. /employer/role gained a real-mode branch: fetches the real role+matches and adds a 'Recompute matches' button calling the already-existing realMatches.recomputeMatches. Zero backend changes — useSession(), realAuth.requestSignIn, /auth/callback's consume step, and every real-api client function used here already supported any role; only the frontend UI gate and two page wirings were missing. Deliberately NOT wired (smallest fix, not a full employer rebuild): employer dashboard/role-list page, Kit purchase status display (already a known Phase 8 gap), candidate-detail lookup on match cards (shows a truncated id instead), contact-unlock allowance. Verified before push: npm run typecheck clean across every workspace, npm test green 490/490 (unchanged — no tested unit touched), npm run validate:all green including full production build of all 33 routes. Full reasoning in docs/DECISIONS.md's second 2026-08-25 entry."
+    },
+    {
+      "name": "Employer-wiring fix (PR-equivalent direct push) deployed to TEST and independently verified live",
+      "status": "PASS",
+      "detail": "Pushed directly to main as commit 468cb9b (2026-08-25/26), given the tightened run-budget instruction to minimize separate PR-check runs for a change already fully validated locally. CI run 32892044202: Validate, Detect doc-only changes, Playwright, and Deploy (test) all succeeded. Local main fast-forwarded to 468cb9b, confirmed equal to origin/main. Deploy job's own log independently read (not just its green checkmark trusted): Plan summary +0 ~0 -0 (frontend-only change, no infra drift), apps/web built and synced to S3 (170 uploaded, 9 deleted, 202 files total — a genuine full re-upload since Next.js content-hashes every changed chunk), smoke test against /health passed. This confirms the employer real-mode UI is genuinely live on test.zoryvex.space, not merely merged."
+    },
+    {
+      "name": "Local CI-equivalence pass + a real, previously-masked flaky Playwright test found and fixed (commit 4ad9055)",
+      "status": "PASS",
+      "detail": "Founder asked to make sure everything is genuinely perfect before the next real CI run. scripts/validate.mjs claims to mirror .github/workflows/ci.yml's Validate job exactly but was actually missing several real steps: npm run bundle:budget, the apps/web-safe-shell build + its two assertions (static-export:assert:safe-shell, safe-shell:assert), terraform fmt -recursive -check -diff across all of infrastructure/ at once (not per-env), and terraform validate for the bootstrap env specifically (only test/production had been checked before). All run manually and confirmed clean. Beyond that, ran the full Playwright suite locally for the first time this pass (previously not run at all, since prior verification relied on npm run validate:all alone, which doesn't include e2e). Found 2 real failures on the first full run: one (an accessibility test) passed reliably in isolation, confirmed as parallel-run resource contention, not a defect. The other (employer-journey.spec.ts 'billing: an active subscription can be viewed and canceled') failed 100% of 1 run alone, then 3/5 under --workers=1 - genuine intermittent flakiness, not a one-off, confirmed via the repo's own 3x-rerun protocol. Root-caused, not just accepted: playwright.config.ts sets retries: 1 in CI, silently absorbing this failure on every CI run that ever hit it - a real, previously-invisible gap in what a green CI checkmark actually proved. Diagnosed via the failing test's captured accessibility snapshot: sign-in correctly reached the code-entry step, but 'Enter the 6-digit code sent to <strong></strong>' rendered with an EMPTY strong tag where the email should be. Root cause confirmed empirically (not guessed): Playwright's fill()+immediate click() on a freshly navigated static-export page can outrun Next.js client-side hydration - the pre-hydration native input event never reaches React's listeners, email state stays '', and hydration then reconciles the controlled input back to that empty state, silently discarding what was typed. Verified the fix empirically before applying it broadly: added a settle wait, reran 5/5 clean (versus ~40-60% failure before), then reverted the diagnostic edit. The identical goto-then-immediately-fill shape existed at 17 sign-in call sites across all 7 spec files with a sign-in form (admin-app/candidate-app/employer-app accessibility specs; admin-journey/candidate-journey/console-errors/employer-journey e2e specs) - most don't assert on the echoed email, so this was mostly invisible there (a blank-email fresh account still passes most assertions, since it behaves like any other fresh account except where the email itself is checked). Fixed all 17 mechanically and identically via a script (not 17 manual edits, to guarantee sameness): one waitForLoadState('networkidle') right after each sign-in-page goto, before the first interaction. Test-only change, no production/app code touched - the real-user risk is low (real typing takes far longer than hydration) and this is sign-in-flow code that shouldn't be touched speculatively. VERIFIED: full Playwright suite (desktop + mobile, e2e + accessibility) ran completely clean afterward - 191 passed, 3 skipped (pre-existing, legitimate, unrelated), 0 failed, repeatably. npm run format:check and npm run lint --max-warnings 0 both clean across the whole repo after the fix. NOT YET TRUE: this fix itself is not yet pushed/CI-validated/live-verified either - see the dedicated push-tracking row below, which this commit is folded into."
+    },
+    {
+      "name": "Deploy-readiness audit - confirmed the only remaining gate is the real CI run itself",
+      "status": "PASS",
+      "detail": "Founder asked to confirm the ONLY thing remaining once the Actions budget resets is the deploy. Checked everything about the Deploy job specifically not yet exercised (Validate and e2e were already fully dry-run locally, see the row above): npm run build:lambda clean, 40 Lambda zips built, no errors. Re-audited the three new routes this pass added (kit-status, matches-get-contact, candidates-evidence-get) for the exact defect class this session already caught twice before (a Lambda IAM role missing a dynamodb_index_arns grant for a GSI it actually queries) - traced each handler's real dependency chain to the actual DynamoDB command issued (getKitOrderStatus -> getKitOrderForRole is a base-table QueryCommand with no IndexName + getRole is a GetCommand; getUnlockedContactInfo -> getRole/getMatch/getCandidate are all GetCommand; getOwnEvidence -> getEvidenceWithVersion is a GetCommand) - none queries a GSI, so the current grant (base table ARN only) on all three is correct, verified against actual code not assumed. Confirmed each new route's Terraform module exists in both infrastructure/envs/test/main.tf and infrastructure/envs/production/main.tf, and each *_deployment_package_path variable's default resolves to the exact zip filename build:lambda produces. Confirmed via gh api .../actions/variables and .../actions/secrets that every GitHub Variable/Secret the Deploy job's env: block reads (APP_ORIGIN, APEX_DOMAIN, DOMAIN_ALIASES, CLOUDFRONT_ACM_CERTIFICATE_ARN, API_CUSTOM_DOMAIN_NAME, API_REGIONAL_ACM_CERTIFICATE_ARN, SES_CONFIGURATION_SET_NAME, ALERT_EMAIL) still exists by name. Honest limitation, not fixed: local AWS SSO credentials are expired (aws sts get-caller-identity fails NoCredentials), so a local dry-run terraform plan against the real test environment wasn't possible - this does NOT block the real deploy, since CI authenticates independently via its own OIDC role (zoryvex-test-deploy), never through any local session; re-authenticating would need the founder's own browser login and wasn't requested since it isn't actually necessary. git status confirmed clean throughout (build:lambda's zips land in the gitignored services/api/dist/). No defect found this round - everything checkable without live AWS access or a real CI run has now been checked."
+    },
+    {
+      "name": "Full-product audit pass (ZORYVEX_BUILD_STATE.md) - 14 commits pushed to origin/main, CI did not run",
+      "status": "WARN",
+      "detail": "Founder issued a 47-section audit directive 2026-08-26; work proceeded locally-only per the standing 'DO NOT PUSH' instruction while the Actions budget stayed exhausted. Real defects found and fixed this pass (own commits, all now on origin/main): employer roles list was 100% local-fake on the live site despite being reachable from nav (wired to real listRoles/listMatches); /employer/billing's Subscribe button fabricated a paid-plan success with zero payment/backend call (replaced with an honest not-open-yet notice); /employer/onboarding had the same fake-success problem for team invites (redirects to /employer in real mode; a Rules-of-Hooks violation introduced while fixing this was caught by lint and corrected before commit); contact-unlock was half-built server-side-correct but no route ever returned the unlocked contact info to any real-mode UI (new getUnlockedContactInfo domain fn, new GET /roles/{roleId}/matches/{candidateId}/contact route, new client fn, new UI, plus a separate pre-existing client-side type-mismatch bug on unlockContact's return shape found and fixed while wiring it); /admin dashboard showed fabricated candidate/employer/role/match/revenue counts in real mode (replaced with an honest notice pointing at the real /admin/exceptions page); Kit purchase status had no real-mode surface at all (new GET /roles/{roleId}/kit-status route + a real 'View Kit deliverables' button, not just a status badge); systemic WCAG AA touch-target violation (~19px) across every nav link in SiteNav/CandidateNav/EmployerNav/AdminNav/SiteFooter (fixed to 36px, all five files); three of eleven repository files' DynamoDB Query calls issued exactly one page and silently truncated past DynamoDB's ~1MB cap for platform-scale access patterns (listDiscoveryOptedCandidates, admin listAllCandidates/listAllEmployers) — fixed via a new queryAllPages helper, regression-tested with a real 3-page aws-sdk-client-mock test proving ExclusiveStartKey threading, the other 8 files correctly left alone as genuinely owner-bounded; evidence editing was uncallable in practice despite existing end-to-end, because no endpoint ever returned an evidence item's optimistic-concurrency version after creation (new GET /candidates/me/evidence/{evidenceId} route + getOwnEvidence domain fn + a full edit page, query-param-routed same as the rest of this static-export app). Also added scripts/real-mode-awareness-check.mjs, a permanent dependency-free CI/local gate failing any app page that uses local-fake data with zero isRealApiConfigured() branch — the exact mechanical signature every one of the UI-facing bugs above shared. Full RBAC/security sweep of all 16 domain-service files and full pagination sweep of all 11 repository files both genuinely completed, not partial. Real interactive browser-testing (local-fake mode only, per the CORS/cookie constraint documented in the network-reachability row above) covered candidate/employer/admin roles across two sessions: evidence add+edit, role creation wizard, Subscribe, Unlock-contact (to completion, allowance counter and revealed email both verified), admin moderation Remove action (audit-log entry content verified, not just presence), and a genuinely fresh non-seeded employer signup. WHAT THIS ROW DOES NOT CLAIM: none of it is 'Independently verified live' per this file's own EVIDENCE TAXONOMY row — every fix above is Implemented and local-validate-green only. 2026-08-26: the founder explicitly authorized pushing despite the exhausted budget ('you can push to repository for now but make sure its fully ready when github resets'). Before push: npm run validate:all green (format, lint 0 warnings, typecheck x7 workspaces, 502/502 Vitest across 66 files, OpenAPI, secrets, terraform-policy across 71 files, real-mode:check, 0 dependency vulnerabilities, full production build of 34 routes, static-export assertion), terraform fmt -check and terraform validate clean on both test and production envs. Pushed: 8617e2c..bc62c3c, fast-forward, confirmed origin/main == local HEAD (0/0 divergence). Checked immediately after push via gh api repos/.../commits/bc62c3c/check-runs (0 check-runs) and gh run list (no run exists for this SHA at all): GitHub did not trigger any workflow for this push, consistent with the exhausted budget, not a new defect — this is a genuine absence of CI signal, not a passed or failed CI run. WARN status (not PASS) specifically because CI has not validated this diff and nothing has been re-deployed/re-verified live since 432d523 — full detail and per-commit history in ZORYVEX_BUILD_STATE.md, which remains the authoritative resume doc for this audit pass."
+    },
+    {
+      "name": "Graded practical tasks expanded to cover all four launch tracks",
+      "status": "PASS",
+      "detail": "30 deterministic tasks with 150 rubric checks: 9 mlops, 8 aws_cloud, 8 cloud_security, 5 devops_platform. Counted from GRADED_TASKS rather than from memory, which had drifted by one task. Every track offers a real choice rather than one take-it-or-leave-it task. Resource and argument names for each were verified against the Terraform AWS provider source docs before writing rather than assumed. Grading gained a disqualifying-check mechanism for failures that are categorical rather than partial (hardcoded credential, unscoped OIDC trust, backup plan covering nothing), each recorded in docs/DECISIONS.md with a test proving a submission can clear the pass mark and still fail. Does not change phase status: slice 10 remains the sole blocker on PHASE 7 PASSED."
+    },
+    {
+      "name": "Playwright worker pool sized by memory rather than cores",
+      "status": "PASS",
+      "detail": "The intermittent mobile e2e failure was worker oversubscription on this 4-core/8GB machine, not the application. Five back-to-back runs at the default worker count failed every time and five at one worker passed every time; Playwright treats an element as stable only when its box is unchanged across two consecutive animation frames, which a thrashing compositor cannot deliver. Sizing the pool by free memory fixed it and made the suite faster (8.3-8.5 min against 12.4). Not masked: no local retry was added and retries stays 0 outside CI."
+    },
+    {
+      "name": "Phase 7 slice 10 — reserved concurrency, documented SLO, and one valid live probe",
+      "status": "PASS",
+      "detail": "Reserved concurrency 5 on the 37 deployed TEST functions (185 reserved, 815 unreserved, against the 100 AWS requires), applied via lambda:PutFunctionConcurrency only. docs/SLO.md written before measurement and unchanged by it. One valid probe: 25 requests at concurrency 5, 6000ms timeout, GET /health, no auth, 25/25 HTTP 200, p50 387ms, p95 1159ms, max 1207ms, every threshold met, exit 0. A prior attempt was UNMEASURED (local DNS) and is preserved rather than replaced; the probe now distinguishes PASS 0, FAIL 1 and UNMEASURED 2 so a measuring failure can never again be recorded as a service failure. Not merged: PHASE 7 PASSED is withheld pending merge and post-merge verification."
+    },
+    {
+      "name": "The 8 undeployed TEST functions deployed, and the concurrency gap closed",
+      "status": "PASS",
+      "detail": "Founder-authorized local terraform apply of a targeted plan: 56 added, 2 changed, 0 destroyed. Adds candidates-evidence-get, candidates-evidence-verify-begin, candidates-evidence-verify, candidates-graded-task, kit-status, matches-evidence, matches-get-contact and verification-reminder, with their roles, policies, log groups, integrations, routes and permissions. All 7 new routes are CUSTOM authorized; the scheduled job was created DISABLED. The 2 changes were the feature-flags SSM description (pre-existing drift) and the shared authorizer Lambda code, which targeting could not exclude because the new routes depend on it and Terraform 1.15.8 has no -exclude. The authorizer redeploy was accepted explicitly, and its currently-deployed bundle was saved byte-exact outside the repository first (sha256 base64 3rcIxt0uZii6c5t0QEYchS86tptsupPtC43tEcr+3io=) so a rollback is one update-function-code call rather than a rebuild cycle with auth down. Independently verified afterwards by reading AWS fresh: 45 functions, 8/8 new present, exactly one pre-existing code change and it is the authorizer, 0 unauthorized code changes, 44 at reservation 5 plus verification-reminder at 1, 0 unreserved, account limit 1000 and unreserved 779. Live concurrency now equals the committed configuration at 221 reserved. Smoke tested: /health 200, and both new authorized routes return a clean 401 rather than 500, which is what proves the redeployed authorizer is running and the routes are protected rather than exposed. The graded-task route is reachable in TEST for the first time. No production resource touched."
+    },
+    {
+      "name": "CI/CD deploy path verified end to end before its first unattended run",
+      "status": "PASS",
+      "detail": "Read-only measurement of what deploy-test will do on the first merge to main, since GitHub Actions has been unavailable on a billing gate and that job has never run against the current state. Plan: 0 to add, 40 to change, 0 to destroy (39 Lambda bundles whose on-disk code differs from what is running, plus the CI deploy role policy adding ssm:GetParameter on last-good-commit and PassRole to scheduler.amazonaws.com). No destroys, so the stateful-destroy guard has nothing to catch. Zip builds are reproducible, so those 39 are real code differences: five of the eight functions deployed 2026-08-28 do not appear in the plan. Permissions simulated against the currently deployed policy rather than the committed one, because that is what the first run assumes with: UpdateFunctionCode, PutRolePolicy on itself, scheduler Get/UpdateSchedule, ssm:PutParameter and S3 site/state access all allowed; the single implicitDeny is ssm:GetParameter on last-good-commit, which this same apply grants and which deploy.mjs never needs. The account OIDC provider exists and ci_deploy_role.aws_iam_role is absent from the plan, so the deployed trust policy already matches the committed exact-subject claim."
+    },
+    {
+      "name": "Defects found and fixed before the pipeline could hit them",
+      "status": "PASS",
+      "detail": "Four real ones. (1) webauthn_rp_id was set only in the gitignored terraform.tfvars and never wired into the deploy job, so the first CI apply would have written WEBAUTHN_RP_ID=\"\" to four Lambdas that throw on an empty value at cold start; now derived from app_origin's host, verified by planning with -var webauthn_rp_id= and getting an identical plan. Reading the live functions also showed the value is \"\" on the deployed Lambdas today, so founder-admin WebAuthn step-up is broken in TEST right now and the pending deploy is what fixes it. (2) deploy-test accepted a skipped e2e, which was only reachable when changed-paths itself failed, and would have deployed an untested commit; both must now have succeeded. (3) zoryvex-test-privacy-consent could reach a GSI1 Query (updateConsent -> withdrawFromOpenMatches -> listMatchesForCandidate) with a table-only IAM policy, so a candidate opting out of discovery would have got an error after the opt-out flag was already written and the audit event already appended; fixed in both environments. (4) validate:all was missing six of CI's checks despite promising parity, so a green local run did not mean a green PR. Each fix is paired with a check that would catch a recurrence: detectBlankingRegressions in deploy-lib (proven against a real plan, finding 12 blankings when app_origin is unsupplied), check-gsi-grants.mjs, and validate-parity.test.mjs (verified to fail when a step is removed)."
+    },
+    {
+      "name": "Feature-flag drift is detectable, and TEST's remaining difference is recorded",
+      "status": "WARN",
+      "detail": "scripts/check-feature-flags.mjs (npm run flags:check) compares the live document against what an environment's Terraform declares, separating off-when-declared-on (what a lockdown looks like) from on-when-declared-off (which nothing in this repository does), and catching an unknown key, which makes FeatureFlagsSchema's .strict() reject the document and silently read every flag as false. deploy.mjs reports it after a successful deploy and never blocks on it. WARN rather than PASS because the live TEST document still reads payments:false and contactUnlocks:false while Terraform declares both true, and ignore_changes = [value] means no apply will move them. Kit checkout in TEST will keep returning \"Kit purchases are currently unavailable\" until one founder-authorized put-parameter writes the complete five-key document. Recorded in docs/MANUAL_ACTIONS.md rather than done here, because the 2026-08-27 commit that created this difference deliberately left it as a founder decision."
+    },
+    {
+      "name": "Full local gates after every change",
+      "status": "PASS",
+      "detail": "npm run validate:all green across all 21 steps, 85 test files and 1079 tests (up from 82/1034 — 45 new tests covering the blanking detector, the GSI call-graph analysis, the feature-flag comparison and the CI parity check). Playwright 215 passed, 0 failed. terraform fmt and validate clean for bootstrap, test and production. gsi:check clean for both environments. No production resource touched; every AWS call this session was read-only."
+    },
+    {
+      "name": "The API contract describes the API",
+      "status": "PASS",
+      "detail": "packages/contracts/openapi.yaml documented one endpoint, /health, while 41 routes shipped — and docs/API.md named it the contract of record and still stated that the only route so far was unauthenticated. npm run openapi:validate had always passed, because valid and complete are different claims. The contract now covers all 41 routes with their auth, path parameters, request bodies and response codes, taken from the handlers rather than guessed at, including the things that are easy to get wrong on a second reading: not-found and not-yours answering the same 404 everywhere, the CSRF header being required on mutating requests only, a failed evidence verification being a 200 with verified:false rather than an error, and the Kit route's payments-flag refusal. Two checks keep it honest: npm run openapi:coverage compares every Terraform route_key against the contract in both directions, and packages/contracts/tests/openapi-schema-parity.test.ts compares component schemas against the zod schemas on property names and required-ness. Both are in validate:all and CI. The parity test found a real subtlety on its first run (a zod .default() makes a field optional on input and always present on output) and was verified to fail when a property is removed from either side."
+    },
+    {
+      "name": "Founder-admin is unreachable in a real build",
+      "status": "WARN",
+      "detail": "Found by tracing every real-api call site in apps/web against the route table: 28 client paths, all resolving to real routes, and none of them WebAuthn. SignInForm routes founder_admin to the local fakes, and the four deployed WebAuthn routes have no caller anywhere in the app, so no passkey can be registered and no step-up performed. GET /admin/exceptions requires a recent step-up, which makes the exception queue impossible to open against the real API. docs/DATA_MODEL.md had recorded the symptom (zero WEBAUTHNCRED# items, ceremony never exercised) without the cause. Nothing is insecure and it fails closed in the right direction, but the founder's own oversight surface does not work. Not built here: it needs a real founder-admin sign-in path plus two browser credential ceremonies, which is new security-sensitive product surface rather than a fix. The admin page's error copy was corrected, since it told the reader to sign in with a stepped-up session that cannot be obtained."
+    },
+    {
+      "name": "CloudFront cache behaviour matches its own stated intent",
+      "status": "PASS",
+      "detail": "The static-site module put its 60-second policy on an ordered behaviour matching \"*.html\" and left Managed-CachingOptimized as the default. That behaviour never matched: CloudFront selects a behaviour from the URI the browser sent, before the viewer-request function rewrites /accessibility to /accessibility.html, and this export uses trailingSlash: false. Confirmed against live distribution E2ZEO82ZLVJKWW, which had exactly that arrangement. The consequence was smaller than it first reads, and checking rather than reasoning is what established that: sync-static-site.mjs uploads HTML with Cache-Control: public, max-age=0, must-revalidate, CloudFront honours an origin directive over a policy default TTL, and curl against /, /accessibility and /contact returns exactly that header with X-Cache: Miss from cloudfront. So the 24-hour default never applied; the exposure was that correctness depended entirely on the sync script setting that header on every object, with nothing in the distribution behind it. Fixed by making the short TTL the default and scoping CachingOptimized to /_next/static/*, where filenames carry a content hash. terraform-policy-check.mjs now fails if the default is pointed back at the managed policy, verified in both directions. A first, overstated version of this finding was written and then withdrawn before it was committed."
+    },
+    {
+      "name": "validate:all runs correctly on a machine that has done a real deploy",
+      "status": "PASS",
+      "detail": "Bringing validate:all to parity with CI added three terraform validate steps, and they failed on this machine: `terraform init -backend=false` in an already-backend-initialised directory still resolves the recorded S3 backend and fails on credentials. CI never sees it, because a fresh checkout has no .terraform — which is exactly the kind of difference that makes a green local run stop meaning anything, and it was introduced by the change meant to fix that. Both validate.mjs and ci.yml now set TF_DATA_DIR to a throwaway directory for those steps, so a validate installs modules somewhere disposable and never touches a real backend init. The commands stay byte-identical between the two, so the parity test still holds. Verified on this machine, which has a backend-initialised test environment: all three environments validate clean and the real .terraform is untouched."
+    },
+    {
+      "name": "A merge during the Actions outage is recoverable",
+      "status": "PASS",
+      "detail": "main has no branch protection (GitHub Free, private repo), so the founder can merge while Actions is still gated. The push run then fails to start and nothing re-triggers it when the allowance resets. ci.yml now also accepts workflow_dispatch, and deploy-test accepts it on refs/heads/main, so a deploy can be started from the Actions tab without inventing a commit. The guaranteed path is still re-running the failed push run, which replays the original event exactly; the dispatch path depends on GitHub issuing the same ref-based OIDC subject for workflow_dispatch, which is documented for branch-triggered workflows but not stated for that trigger by name, and a mismatch would fail visibly at the credential exchange without affecting the push path. Both are written down in docs/RUNBOOKS.md's new deploy section."
+    },
+    {
+      "name": "Documentation corrected where it had outrun or lagged reality",
+      "status": "PASS",
+      "detail": "docs/RUNBOOKS.md opened by saying there is nothing deployed and closed by saying no deploy script had ever run; both were false, and deploy.mjs's own header said the same. What has genuinely never run is the rollback path, so that is now what those places say. docs/API.md described a one-route unauthenticated API. docs/PHASE_REGISTER.md still had Phase 8 as not independently verified live, when a real TEST-mode checkout completed on 2026-08-26. docs/RISK_REGISTER.md carried the Paystack verify field mapping as unexercised, when that same checkout proves it including the uppercase NGN currency assumption, since an order cannot reach succeeded unless all four verify checks pass. The admin exception page told a reader to sign in with a stepped-up session that cannot be obtained. One finding of my own was overstated and withdrawn before it was committed: a first reading said CloudFront had been caching every page for a day, and checking the live response headers showed the origin's own max-age=0 had always prevented that."
+    },
+    {
+      "name": "Kit raised to NGN 95,000 and standard tiers raised, founding held",
+      "status": "PASS",
+      "detail": "Founder decision 2026-08-30. Kit 29,000 -> 95,000 one-time; standard monthly 119/345/899k -> 185/520/1,350k; founding 79/229/599k unchanged, so the founding discount widens from about a third to over half and the only real scarcity here (the 25-place cap, enforced in code) becomes worth more without inventing any urgency around it. Three defects had to be fixed before the change was safe: the price was declared twice, once for what the site displayed and once for what Paystack actually collected, with nothing able to detect a disagreement; KitOrderSchema froze it as z.literal(29000), so raising it would have made every historical order unreadable including the real 2026-08-26 purchase, and a test was guarding that bug; and the local payments adapter hard-coded the amount when turning a checkout into an order instead of using the checkout in front of it. KIT_PRICE_NGN now lives once in packages/contracts and is imported everywhere, amountNGN records what was charged, and a fixture deliberately keeps a refunded order at the old price to prove billing history renders charged amounts rather than the current one. The Paystack fee table was recomputed rather than re-typed: the four unchanged founding rows reproduced exactly, which is what confirms the formula."
+    },
+    {
+      "name": "The Kit is now sold on a reason, with the limits stated and no invented evidence",
+      "status": "PASS",
+      "detail": "Every page describing the Kit listed six deliverables and gave no reason to want them, which was survivable at 29,000 and is not at 95,000. KIT_STAKES states the true thing: the buyer is about to decide on claims nobody has checked, and that decision costs months of salary to get wrong. Deliberately not a statistic, because no sourced cost-of-a-bad-hire figure exists in this repository and docs/COMMERCIAL_RUNBOOK.md forbids claims that outrun the evidence whether or not they flatter us; a test fails the build if that copy ever contains a percentage or the words studies, research, average or industry. The Kit card also now lists what it does not cover, which every subscription tier already did: it does not find candidates, it covers one role, and it does not make the decision, the last of which is CLAUDE.md's AI boundary said out loud. Nothing was added to the checkout flow per the founder's instruction that it stay easy to use; the single change there answers what happens after payment, which the page previously left open at a much larger number."
+    },
+    {
+      "name": "A whole package's test suite had never run",
+      "status": "PASS",
+      "detail": "packages/kit-templates has three test files and its own vitest.config.ts and was absent from the root config's projects list, so npm test and CI had never executed any of its 31 tests. The suite reported a healthy count the entire time; those tests were just not among the ones being counted. One of them asserts the free proof-gap preview never fabricates a candidate or implies a payment has occurred, which is a promise docs/COMMERCIAL_RUNBOOK.md makes on the product's behalf. Found by noticing a test-path filter match nothing, confirmed with vitest list. All 31 pass once registered, so nothing was hiding, but nothing was checking. scripts/lib/vitest-projects.test.mjs now fails if a workspace with a vitest config is missing from the list or if the list names one that no longer exists, verified in both directions. Suite count went from 1104 to 1142 tests across 90 files."
+    },
+    {
+      "name": "Marketing claims checked against their own cited sources",
+      "status": "PASS",
+      "detail": "The /for-employers page opened with three factual market claims and two live source links, and neither source said what the page said. It attributed a one-in-four-fake-profiles-by-2028 projection to Gartner when the source attributes it to unnamed experts and hedges it as \"could be\"; it called cloud security the single largest skills gap when the source ranks it #1 for recruiting demand but #2 overall behind AI; and it claimed fraudulent applicants were 2026's most-cited hiring concern ahead of talent shortage, which appears in neither source. All three errors moved in our favour. This matters more here than almost anywhere: the page one click away sells a Kit for verifying other people's claims, so a prospect who follows a citation and finds it contradicting us learns something no correct copy elsewhere repairs. Corrected to the sources' own wording and hedging, and both registered in docs/SOURCES.md, whose stated rule already required a row and had been read as covering only provider and tooling behaviour. Found by fetching the sources rather than re-reading our own sentences."
+    },
+    {
+      "name": "Candidate-side pass, matching the one the employer side had",
+      "status": "PASS",
+      "detail": "Three corrections and one omission. /for-talent claimed a per-launch-track discovery control that does not exist: a candidate has one launchTrack and one discoveryOptIn flag, which the section below it on the same page already said, and the track argument to setDiscoveryOptIn is a GSI partition key rather than a toggle. The API contract named the session cookie __Host-zoryvex-session while cookies.ts uses __Host-zoryvex_session, introduced when the contract was written and missed because the parity test spelled the name itself rather than reading it from the code; the test now reads it. The employer \"what we checked\" empty state named two causes and omitted the one that is not the candidate's doing, a lapsed credential. And /how-verification-works, whose entire job is defining what proof means here, never mentioned that a verification expires, which is exactly what makes the word mean something different here from a permanent badge; now documented on the state card, in its own section, and on the Scout tier where an employer decides what they are buying."
+    },
+    {
+      "name": "Auth, deletion, scan and grading paths reviewed and found sound",
+      "status": "PASS",
+      "detail": "Recorded so the next reader does not re-derive it. Auth: bounded per-email and per-IP rate limits with a generic error that does not reveal which bound was hit; 256-bit token, keyed-hashed at rest, consumed atomically, identical UnauthorizedError for every failure mode; an existing account keeps its own role regardless of the requested intendedRole, so a code requested as employer cannot promote a candidate; SameSite=Lax is load-bearing because Strict would drop the session on the return navigation from Paystack; the pepper is cached per instance. Deletion deletes its own idempotency guard last, so a retry after partial failure re-runs correctly, and AI explanations live on the match so deleting matches deletes them. A GuardDuty scan result arriving after its file record is gone is a clean no-op rather than a DLQ entry, so deletion cannot manufacture alarms. Graded-task parameters are a pure SHA-256 of candidate and task, so a brief cannot change under a candidate; grading requires identity, score and no disqualifying finding together, with identity outside the score because the pass mark tolerates one miss; a rubric check that throws counts as failed."
+    },
+    {
+      "name": "The Kit checkout screen meets its own acceptance criterion",
+      "status": "PASS",
+      "detail": "docs/PRODUCT_SPEC.md requires concrete deliverables, exact limits, final price, seller disclosure and cancellation/refund behaviour before any charge, and docs/ACCEPTANCE_CRITERIA.md repeats it as a Kit-checkout criterion. The screen showed two of the five: price and the Paystack disclosure. The deliverables, the limits and the refund behaviour were absent from the one page where money changes hands. Found by reading the criteria against the page, because the criteria are prose and nothing checks prose. The six deliverables were meanwhile written out literally on two marketing pages and shown nowhere at checkout; they are now one KIT_DELIVERABLES constant rendered by all three, so what a buyer agrees to cannot drift from what they were shown. The refund copy states that refunds are arranged by hand with no automated button, which is what docs/PAYMENTS.md records, and a test fails if it ever starts promising an instant or automatic refund. Also corrected a stale criterion that still called successor pricing \"not-yet-authorized\" after it was authorized on 2026-08-27 and raised on 2026-08-30. Verified by the employer journey and accessibility specs, 48 passed."
+    },
+    {
+      "name": "Every Lambda is now monitored, for twenty cents a month",
+      "status": "PASS",
+      "detail": "docs/RISK_REGISTER.md had carried an open Medium risk since Phase 5: the lambda_errors, lambda_throttles and lambda_duration alarms cover only api and authorizer, so a silent failure loop in any of the other 43 deployed functions surfaced only as a downstream symptom. Closed with two alarms on AWS/Lambda Errors and Throttles with no FunctionName dimension, which CloudWatch publishes as an account-and-region aggregate. Two alarm metrics at $0.10 each, confirmed against AWS's live pricing page and recorded in docs/SOURCES.md, versus roughly $12.90/month to put three alarms on each of the remaining 43. A SEARCH expression was considered and rejected on the same evidence, which contained the finding that changed the design: Metrics Insights alarms bill per metric analysed, so searching 45 functions costs about what 45 alarms cost rather than being a cheap middle ground. The trade accepted deliberately is that these say something failed, not which thing; that was the part missing, and CloudWatch answers the rest in seconds. Per-function alarms stay available as the upgrade if anyone is ever paged often enough to want them."
+    },
+    {
+      "name": "Final end-state verification of what a merge would apply",
+      "status": "PASS",
+      "detail": "Bundles rebuilt and re-planned against live TEST at 801833d: 2 to add, 50 to change, 0 to destroy. The additions are the two account-level Lambda alarms. Both deploy guards run clean against that exact plan: hasDangerousDestroy false, detectBlankingRegressions zero findings. Working tree clean, branch in sync with origin, PR #74 mergeable at 16 commits. Local gates green throughout: validate:all 22 steps and 1,146 tests, Playwright 215 passed with 0 failed. Two things remain outside a merge: the founder's one SSM write enabling payments and contactUnlocks in TEST, and live re-verification after the pipeline deploy, which a green CI run does not substitute for."
+    },
+    {
+      "name": "The voice standard is now enforced rather than remembered",
+      "status": "PASS",
+      "detail": "CLAUDE.md calls its voice section \"a standing bar, not a one-time cleanup\", to be applied to every new page, string or component. Nothing enforced it; it held because whoever was writing happened to remember, which is the shape of every other drift found this session. npm run copy:voice now scans the two apps' pages and components, the shared pricing copy and the Kit templates, 79 files, for the banned vocabulary list verbatim and for em dashes in visible prose. Comments are stripped first, because the rule is about how the product speaks and not how the source explains itself. The scan found no banned vocabulary anywhere, which says the copy was genuinely good, and one real em dash in a paragraph on the candidate verification page, now a full stop. Two bugs in the checker were found and fixed before it was trusted: comment stripping collapsed lines so every reported line number was wrong, and the compact-label exemption CLAUDE.md grants (\"Item — price\") did not survive JSX putting a heading on more than one line, which flagged the exact example the rule names as fine. It exempts short headings and titles, with a length bound so a heading long enough to be a sentence is still checked as one."
+    },
+    {
+      "name": "Four graded-task rubrics marked the more idiomatic answer wrong",
+      "status": "PASS",
+      "detail": "The graded tasks are how evidence becomes verified, so a rubric that fails competent work is the most damaging bug here: invisible from the inside, landing on the person least able to argue, while claiming to be objective. Four checks read policy text via rawText(findResources(...)), and findResources filters on type === resource, so a data \"aws_iam_policy_document\" block was invisible. That is the form the provider documentation recommends and the form this repository's own ci-deploy-role uses; written that way the resource holds only a .json reference and the candidate was told they had not written what they had written. Affected: S3 TLS-only deny, Lambda trust principal, KMS wildcard principal, cross-account sts:AssumeRole. The KMS one failed in the opposite and worse direction, passing a wildcard principal hidden in a data source through the check named for catching it. Fixed with findDataSources in hcl.ts and a policyText helper; the S3 check still requires the bucket policy to exist so an unattached document remains a miss. Three tests, two of them verified to fail against the unfixed grader first. Found by reading one task end to end and asking what a good candidate would actually type, not by any check."
+    },
+    {
+      "name": "The least-privilege task's two security checks were passing the worst answer",
+      "status": "PASS",
+      "detail": "Pulling the same thread as the four policy-text rubrics found two more, and these were the serious ones. no_wildcard_action and scoped_resources are the entire point of that task, and both matched on quoted text. rawText only preserves quotes for the jsonencode form, whose body survives as one unparsed expression; the same policy written as an aws_iam_policy_document parses into real strings with the quotes gone, so neither pattern could match it. A submission granting actions [\"*\"] and resources [\"*\"] in a policy document passed both checks named for catching exactly that. Fixed with valuesUnderKey, which gathers what a policy grants from either rendering, tested against real values as well as the raw jsonencode body. A bare star fails; an ARN ending in a star still passes, because the brief rules out the unqualified star and not every star, and a test holds that line. Four tests, one verified to fail against the old check first."
+    },
+    {
+      "name": "Seven graded-task rubrics could not read a policy written the recommended way",
+      "status": "PASS",
+      "detail": "One blind spot, seven checks, found by reading tasks end to end rather than by any test. A policy written as an aws_iam_policy_document data source was invisible: findResources filters on type === resource, and rawText only keeps quotes for the jsonencode form whose body survives as one unparsed expression. Three failure modes resulted. Missed credit, on the S3 TLS-only deny and the Lambda trust principal, where a candidate was told they had not written what they had written. Security checks passing the worst answer, on the KMS wildcard principal and on the least-privilege task's no_wildcard_action and scoped_resources, where actions [\"*\"] and resources [\"*\"] in a policy document walked through the checks named for catching them. And read_only_permissions, which returns false when it finds no actions and therefore failed every candidate using the idiomatic form whether their policy was read-only or not. Fixed with findDataSources in hcl.ts, and policyText, valuesUnderKey and policyActionValues in the rubric module, so every question about a policy is asked of both renderings. An ARN ending in a star still passes, held by its own test. Ten tests added, four of them verified to fail against the unfixed graders first."
+    },
+    {
+      "name": "The demo could not be signed into, and matches were unsorted",
+      "status": "PASS",
+      "detail": "Both found by trying to demonstrate the product rather than by reading it. The sign-in form said the demo code was \"recorded in the founder/admin view\"; no such view exists, and the code was only reachable through developer tools, which the e2e suite uses and a person cannot. The product had a demo mode a non-technical founder could not enter. The code is now shown on the code step, framed as a demo affordance that a real build emails and never displays. Separately, listMatchesForRole returns store order, which is candidate-id order in both localStorage and DynamoDB: the demo store returned scores 0.75, 0.80, 0.60, 0.70, 0.65 in that order and that is what an employer saw. Now sorted strongest first with candidate id breaking ties, on the server and in the demo path, with tests. A first version of that fix quoted misread percentages from a downscaled screenshot; the comment and test fixture now carry the measured values. npm run demo:tour drives the whole product and writes 22 captioned screenshots, so the founder can see what exists without reading code."
+    },
+    {
+      "name": "Standard subscription prices had no code path",
+      "status": "PASS",
+      "detail": "The pricing page said the first 25 organizations pay founding prices and everyone after pays standard. Nothing implemented the second half. FOUNDING_SLOTS_TOTAL existed only in apps/web and only to write the number 25 into three sentences; local-payments-adapter held its own copy of the three founding prices, had no copy of the standard prices, and charged founding rates to every subscriber. The 26th organization would have paid 79,000 for the life of its subscription on a page that told it 185,000. subscriptionPrice(plan, placesTaken) in packages/contracts now selects, against a founding-place ledger. Entitlement records priceNGN and foundingMember, stamped at subscription and never recomputed, which is what 'founding members keep their price for the life of the subscription' needed to be true. Two product rules this forced are recorded in docs/DECISIONS.md for founder review: a founding place belongs to the organization and cancelling does not release it, and a checkout quoted at the founding price is honoured even if the last place goes mid-payment."
+    },
+    {
+      "name": "Two price guards were checking last month's prices",
+      "status": "PASS",
+      "detail": "assert-safe-shell.mjs proves the neutral export shows no pricing, using a hand-written list of four literals that the 2026-08-30 raise did not update, so the current Kit price and all three standard prices were not checked for at all. It now derives the list from contracts and fails below seven; verified by planting NGN 520,000 in the built output and watching it fail on exactly that. The settlement table in docs/PRODUCT_SPEC.md had no guard: all fourteen figures recomputed correct, so npm run fees:check fixes nothing today and stops the next price change leaving one quietly wrong."
+    },
+    {
+      "name": "Contact unlock was unreachable on the real backend, twice over",
+      "status": "PASS",
+      "detail": "unlockContact refuses unless candidate.contactUnlockConsent is true. The API accepts, audits and versions that field; apps/web never shipped a control that sets it and no fixture had it, so every unlock against the real backend would have been refused for every candidate. Separately, matches_unlock_contact_route passed only TABLE_NAME, so getFeatureFlags returned every flag false and flags.contactUnlocks read false on every request: the founder's pending put-parameter to enable unlocks in TEST would have changed nothing. Four more routes had the same gap, including kit_create_order_route, which gates on flags.payments and is the primary launch offer. All five now carry FEATURE_FLAGS_PARAM and an explicit ssm:GetParameter grant in both environments, and npm run flags:wiring fails on either half."
+    },
+    {
+      "name": "The marketplace gate was enforced only in the browser",
+      "status": "PASS",
+      "detail": "docs/COMMERCIAL_RUNBOOK.md requires the 5-real-matches eligibility check to pass server-side. The threshold lived in a const at the top of apps/web's role page and nothing in services/api counted matches for any purpose. unlockContact now counts and refuses below MARKETPLACE_GATE_MIN_MATCHES, checked before consent and allowance so an under-supplied role is not reported as a candidate declining. Survivable today only by accident, because subscriptions cannot be bought in real mode so every allowance is zero."
+    },
+    {
+      "name": "Three user-facing statements that were not true",
+      "status": "PASS",
+      "detail": "Roles were create-only although PATCH /roles/{id} existed with ownership checks and optimistic concurrency, so a mistyped must-have requirement could only be fixed by buying a second Kit; /employer/role/edit now exists. The evidence visibility option 'Shared with an employer I apply to' described a narrower disclosure than happened (every filter reads visibility !== 'private') and an action the product does not support (no application entity or apply flow exists), and is gone. The candidate's employer preview claimed to be 'exactly what an employer sees' while showing their own name, which employers do not see until they spend a contact unlock."
+    },
+    {
+      "name": "The e2e suite could report green against a stale build",
+      "status": "PASS",
+      "detail": "playwright.config.ts used reuseExistingServer: !process.env.CI, Playwright's default. A server left from an earlier run answered on 4173, the npm run build in front of it never ran, and a suite that should have failed on a changed match list passed against a build twenty minutes old with nothing in the output saying so. Reuse is off in both places and npm run e2e frees the ports first."
+    },
+    {
+      "name": "The exception queue buried the exceptions",
+      "status": "PASS",
+      "detail": "getExceptionQueue returned the fifty most recent audit events, newest first, so a busy hour of ordinary unlocks pushed the one line needing a person to the bottom. `reason` was already the marker without anyone deciding it was: set on a rejected evidence file and on a candidate who was not told their contact had been shared, never on a routine event. Those sort first now. The window is not widened, and the page says so rather than implying a complete list of outstanding items."
+    },
+    {
+      "name": "Accessibility: the claim was true of the pages that had been scanned",
+      "status": "PASS",
+      "detail": "/candidate/profile/preview had never been in the axe suite. Adding it found two contrast failures: one added this session, and one there since the page was written (text-ink-500 at 14px on a Card, 4.21:1 against a 4.5:1 minimum). globals.css already documents that exact hazard next to the token and notes it had been caught twice before; this was the third. Every page and component touched or added this session is now scanned. 54 a11y checks pass."
+    },
+    {
+      "name": "The webhook idempotency key was a field most Paystack events do not have",
+      "status": "PASS",
+      "detail": "processPaystackWebhook keyed idempotency on payload.data.id and threw when it was missing. data.id is the transaction id: present on charge.success and the dispute events, absent from subscription.create, subscription.disable, subscription.not_renew, invoice.create, invoice.update and invoice.payment_failed, and undefined on subscription.expiring_cards because that event sends data as an array. Every one of those would have returned 500 and been retried by Paystack every three minutes for four attempts then hourly for seventy-two hours, for every such event, indefinitely. The key is now a SHA-256 of the raw body, which is exactly what a Paystack retry redelivers. Found by reading Paystack's current documentation rather than the shapes already in this codebase; the same reading found a charge.failed branch for an event Paystack does not send."
+    },
+    {
+      "name": "Paystack webhooks only fire for successful transactions, so reconciliation is required",
+      "status": "PASS",
+      "detail": "Paystack's own words: 'we currently send webhook events for just successful transactions'. There is no charge.failed and no charge.abandoned. A declined card and a closed checkout tab both produce silence, and so does a charge.success whose delivery fails for the full seventy-two hour retry window. A PaymentAttempt row is now written before Paystack is contacted, and an hourly job verifies every attempt that never reached an outcome and separately checks Paystack's recent successes for any with no record here at all. Both directions, because a one-directional reconciliation reports all clear in exactly the case that costs the most."
+    },
+    {
+      "name": "A failed webhook can now be retried instead of alerting a human",
+      "status": "PASS",
+      "detail": "The idempotency marker was written before the effect and never removed, so any failure past that line was unrecoverable: the customer charged, the effect half-applied, and every Paystack retry short-circuited as a duplicate. Writing the marker first is still correct — it stops two concurrent deliveries both granting an entitlement. Every effect is now idempotent by construction (conditional status transitions, freshness-guarded writes), so a failure deletes the marker and rethrows, and Paystack's retry genuinely re-attempts. A human is alerted only in the case that is actually stuck: the effect failed and the marker could not be cleared."
+    },
+    {
+      "name": "Paystack does not retry a failed renewal, and docs/PAYMENTS.md said it did",
+      "status": "PASS",
+      "detail": "The document's dunning section was built on 'Paystack's own retry schedule runs first'. Paystack's actual words: 'If a subscription charge fails, we don't retry it.' The subscription sits at status attention and the next attempt is the next payment date, a month away. A seven-day grace window now covers that gap: cutting access the instant a charge fails punishes an employer whose card expired over a weekend, and leaving it for the full month gives a month away and calls it dunning. Access is derived on every read rather than stored, so a window that closed twenty minutes ago is closed the next time anybody looks."
+    },
+    {
+      "name": "Three statuses, and a billing page that says what happens next",
+      "status": "PASS",
+      "detail": "Payment status, subscription status and access state are separate fields because they answer different questions and change at different moments. The employer-facing page renders all three in words rather than in Paystack's vocabulary and explains the two behaviours nobody would guess: cancelling ends renewal rather than access, and a declined renewal is not retried for a month. The founder's diagnostic keeps the raw Paystack statuses, gateway responses and transaction ids the customer views drop, and states in sentences what is wrong. Neither view can show the subscription email_token: the server strips it before the response is built, and a test asserts the value never appears anywhere in the payload."
+    },
+    {
+      "name": "getEntitlement was discarding the founding price on every real-backend read",
+      "status": "PASS",
+      "detail": "priceNGN and foundingMember were added to EntitlementSchema on 2026-08-31 so that 'founding members keep their price for the life of the subscription' had somewhere to be true. employer-repository.ts parsed a hand-listed subset of five fields and was never updated; both new fields carry .default(), so the parse kept succeeding and returned null and false for every employer. The second time a hand-listed projection has silently dropped a field, so the projection now parses the whole stored item, which z.object strips to the schema anyway."
+    },
+    {
+      "name": "Annual billing is modelled, priced by nobody, and therefore not offered",
+      "status": "PASS",
+      "detail": "The founder asked for monthly and yearly subscriptions. CLAUDE.md fixes the prices as monthly with no annual plans, and no annual amount has ever been founder-approved. Inventing one would be setting a price rather than making a rounding choice, and a twelve-times multiple is not an annual price. The interval is a first-class dimension through the schema, the plan-key shape, the state machine and reconciliation; OFFERED_BILLING_INTERVALS contains only monthly, and subscriptionAmountNGN throws for anything else rather than returning a number somebody might charge. Recorded as a live founder question in docs/MANUAL_ACTIONS.md."
+    },
+    {
+      "name": "Contact unlocks kept working after a subscription lapsed",
+      "status": "PASS",
+      "detail": "getEntitlementPlan returns entitlement.plan and has never looked at entitlement.status, so an organization whose grace window closed kept a plan name and kept spending five contact unlocks a month against it. unlockContact now checks derived marketplace access, and checks it before anything about the role or the candidate: an organization that is not paying should not learn a role's match count or whether a particular candidate consented, because both are things the product sells. Grace still grants, which is the point of a grace window."
+    },
+    {
+      "name": "The Kit was the one paid product reconciliation could not recover",
+      "status": "PASS",
+      "detail": "A KitOrder describes a thing that was bought. It cannot describe a charge.success whose delivery failed for the full seventy-two hour retry window, which is exactly the case where the employer has paid and has nothing, and Paystack sends no webhook that would say so. requestKitOrder now writes a PaymentAttempt beside the order, the webhook settles it, and reconciliation recovers it through the same conditional transition the webhook uses, so the two routes cannot both grant."
+    },
+    {
+      "name": "subscription.create defaulted the tier when it could not find the checkout",
+      "status": "PASS",
+      "detail": "The default was scout/standard, which would have recorded a Partner founding subscriber as a Scout on the standard price: wrong in both directions at once and invisible until they complained. The tier now comes from the plan-code registry, which is authoritative because Paystack is naming a code this system chose and wrote down, with the payment attempt as fallback and a founder alert rather than a guess when neither resolves. Separately, a renewal charge or a paid invoice landing after a cancel request no longer sets the subscription back to active, which would have shown the employer as subscribed on the page they cancelled from."
+    },
+    {
+      "name": "Six Paystack plans, created by a script that cannot invent an amount",
+      "status": "PASS",
+      "detail": "Six plans is six chances to type an amount wrong in a dashboard, and a wrong amount on a Plan bills that number every month for the life of every subscription attached to it. npm run paystack:plans reads the amounts out of packages/contracts rather than carrying its own copy, refuses any key that is not sk_test_, creates only what is missing, refuses to reuse a plan whose amount or interval does not match, and prints the exact aws ssm put-parameter command for the resulting codes. --dry-run shows all six without contacting Paystack. The parse is pinned by its own test, so a rename in the price table fails loudly rather than silently creating nothing and reporting success."
+    },
+    {
+      "name": "Signing out as an employer did not sign you out",
+      "status": "PASS",
+      "detail": "EmployerNav cleared local storage and stopped, so on the real backend the httpOnly session cookie and its server record both survived: the next visit, or anyone else on a shared machine, was still authenticated. CandidateNav had always called the real endpoint; AdminNav had the same gap and both admin pages behind it read the real backend. Found by walking every route as a first-time user rather than by running the suite, which is the only way this class of defect surfaces: nothing about it is a logic error."
+    },
+    {
+      "name": "The real role page ranked nothing and offered an unlock it could not honour",
+      "status": "PASS",
+      "detail": "The local path sorts matches by score with a comment explaining that neither store returns an order meaning anything; the real path did not, so the mode that charges people for a ranked shortlist was the one serving it unranked. The same page offered Unlock contact on every match with no mention of the five-match marketplace gate, so an employer under the threshold got a button, a click, and a 403 explaining a rule the page had never shown them. Both fixed, and the gate copy no longer hardcodes the threshold in prose."
+    },
+    {
+      "name": "One failed request emptied a list, and one download could silently not happen",
+      "status": "PASS",
+      "detail": "The roles list fetched every role's counts under a single Promise.all, so one blip on one role replaced all of them with a 500 page. The data export clicked a detached anchor, which has never reliably worked in Firefox, and revoked the object URL synchronously, which can cancel the download the click just started. The Kit download already got the second half right, with a comment saying why. The export is the one place a candidate exercises a legal right, so it is the worst place for a silent failure."
+    },
+    {
+      "name": "The server's own sentence now survives to the reader",
+      "status": "PASS",
+      "detail": "The Kit checkout blamed Paystack for refusals that were nothing to do with Paystack (this role already has a paid Kit, purchases are paused) and told the buyer to try again, which would never have worked. messageFor keeps a 4xx message from the server and uses the caller's fallback for a 5xx, because a 4xx is a statement about this request that will be true again and a 5xx is a statement about a bad moment. Safe by construction: only AppError messages reach a client at all."
+    },
+    {
+      "name": "The threshold was real from the beginning and was never stated",
+      "status": "PASS",
+      "detail": "recomputeMatchesForRole writes no match at all for a candidate with no verified evidence supporting a requirement, so somebody with an account, a full profile and nothing checked was invisible to every employer with nothing on their screen saying so. They would reasonably conclude the product was empty rather than that they were outside it. ThresholdPanel names which of the three real conditions is missing: a live proof, the discovery opt-in, or that proof not being private. Each is computed the same way the server computes it, including re-checking a credential's expiry against the clock rather than trusting the stored verified flag."
+    },
+    {
+      "name": "A brand built on what the code already does, and one part deliberately refused",
+      "status": "PASS",
+      "detail": "The enemy is \"trust me\" — a behaviour, not a group — and it is already VERIFICATION_WEIGHT scoring an unchecked claim at zero rather than at a discount. The ritual is the four fields EvidenceSchema has always had, named. The mark dates itself and shows a lapsed proof as lapsed, because a badge implying permanence is a lie about how credentials work. The words are claim and proof rather than evidence, which flattened the one distinction the product rests on. Not built: manufactured belief, which docs/COMMERCIAL_RUNBOOK.md forbids as a dark pattern and which would make this product its own counter-example; and the prophecy, because a brand whose single claim is \"don't take a claim on trust\" cannot make an unverifiable statement about the future without refuting itself. Recorded in docs/BRAND.md and docs/DECISIONS.md."
+    },
+    {
+      "name": "A live Paystack key could have been pasted into TEST and nothing would have noticed",
+      "status": "PASS",
+      "detail": "Dashboard screenshots confirmed the account is live-approved, so a working sk_live_ key exists and can be pasted anywhere a key is asked for. The most expensive mistake available was that key landing in /zoryvex/test/paystack/secret-key, where every automated test, every demo walkthrough and every hourly reconciliation run would have moved real money silently: the environment is decided entirely by which key is configured, with no code branch on environment, which is the right design and exactly why it needed a second opinion. Each environment now declares PAYSTACK_KEY_PREFIX (sk_test_ in test, sk_live_ in production) on every route that reads the key, and getPaystackSecretKey refuses a mismatch. Refusing is the correct direction: a stopped payment is recoverable with one parameter write and a real charge is not. The error names the prefixes, never the key. Also confirmed from the same screenshots: the TEST webhook URL is already set correctly, so that manual action is done."
+    },
+    {
+      "name": "The spec's hard gate on marketplace checkout existed on one side only",
+      "status": "PASS",
+      "detail": "docs/PRODUCT_SPEC.md has always said monthly marketplace checkout stays disabled until a saved role has five real, current, discovery-opted matches, and calls it a hard gate rather than a soft nudge. Only half existed: unlockContact refused below the threshold and startSubscriptionCheckout never looked at a match count, so an organization could be sold a subscription while every role it owned was below the line and then find it could not spend a single unlock anywhere. That is a refund rather than a sale, and it is exactly what the rule exists to prevent. Three marketing pages described a per-role checkout gate, which a per-organization subscription cannot be, and which is probably why it was never built: as worded it does not typecheck against the product. The intent is what was implemented — do not sell access nobody can use — so a checkout now requires at least one eligible role, contact details still open per role, and the spec and all four surfaces now say the same thing the code does."
+    },
+    {
+      "name": "Standard prices raised the day before the Paystack plans would have fixed them",
+      "status": "PASS",
+      "detail": "Founder decision 2026-09-01: standard Scout 185,000 to 250,000, Team 520,000 to 700,000, Partner 1,350,000 to 5,000,000. Founding held at 79,000 / 229,000 / 599,000 for the third consecutive raise, and the Kit held at 95,000. The timing mattered more than the numbers: a Paystack Plan's amount is fixed on the object once created, no plan objects existed yet and nobody had subscribed, so this was a text edit rather than six new Plan objects and a migration. One source of truth changed and every guard that pins it caught the rest, including fees:check, which refused the settlement table until its nine fee and settlement figures were regenerated from scripts/lib/paystack-fees.mjs rather than edited by hand. Two consequences were flagged to the founder before the change and are recorded in docs/DECISIONS.md: standard Partner is now 7x standard Team where Team is 2.8x Scout, so the tiers must never be described as evenly spaced, and the two price sets interleave, with founding Team cheaper than standard Scout."
+    },
+    {
+      "name": "One standard Partner charge fits inside Paystack's lifetime limit, and the second does not",
+      "status": "PASS",
+      "detail": "Found by checking the raise against the provider rather than only against our own tables. Paystack's Nigerian Starter Business lifetime collection limit is NGN 8,000,000, re-verified 2026-09-01 against the current support article (a legacy support2 page still says 2,000,000 and is stale). Standard Partner is NGN 5,000,000, so exactly one charge fits: the subscription cannot take its own first renewal, Paystack neither retries a failed subscription charge nor sends a webhook for one, and the organization would keep access it had stopped paying for until a human noticed. The count is now computed by chargesBeforeLimit in scripts/lib/paystack-fees.mjs, carried per SKU in docs/PRODUCT_SPEC.md, and pinned by npm run fees:check, which was proved to fail by planting a wrong count and by deleting a row. Raising standard Partner took that row from 5 to 1 and nothing would have said so. Lifting the ceiling means becoming a Paystack Registered Business, which requires CAC registration and stays NOT AUTHORIZED BY FOUNDER, so this is recorded as an open founder decision in docs/RISK_REGISTER.md rather than worked around in code."
+    },
+    {
+      "name": "A guard that pins a string can prove agreement with itself, never with the bank statement",
+      "status": "PASS",
+      "detail": "The Paystack disclosure named the business as 'Abbas Solution' on every paid surface. The account is 'Abba's Solutions'. The Phase 1 survey on 2026-08-15 misread the dashboard and recorded the misreading as a verified observation; CLAUDE.md's exact-wording rule, the acceptance criterion, PRODUCT_SPEC, the OpenAPI description, V48_BINDING, FOUNDER_READINESS, this file, and the constant six pages render from all inherited it. openapi-schema-parity pinned the string and passed for seventeen days, because it compared our wrong string to our own wrong file. The founder caught it by reading the dashboard, which is the only place it could have been caught. Fixed by extracting PAYSTACK_BUSINESS_NAME as the single declaration, pointing the footer and the trust-and-safety page at it instead of their own copies, and adding apps/web/tests/paystack-disclosure.test.ts, which fails if the name is written out by hand anywhere else under app/ or src/ and was proved by planting one. Historical records were corrected with a dated note that the name was misread rather than renamed; the verbatim COMMERCIAL_RUNBOOK line was deliberately left alone. Nothing was ever charged under either name: no plan, subscription or transaction exists in test or live."
+    },
+    {
+      "name": "Six Paystack TEST plans exist, and Paystack was asked rather than the script believed",
+      "status": "PASS",
+      "detail": "Created 2026-09-01 by npm run paystack:plans -- test, on the founder's instruction and after they had moved the dashboard out of Live mode. The test secret key was read from /zoryvex/test/paystack/secret-key straight into the process environment, so it never reached a terminal, a file, or a transcript, and the script refuses any key that is not sk_test_. Verified by reading GET /plan back from Paystack rather than trusting the script's own output: exactly six plans, correct names, amounts 79,000 / 250,000 / 229,000 / 700,000 / 599,000 / 5,000,000, all monthly, all NGN. This was the step the price raise had to precede, because a Plan's amount is fixed on the object once created. The plan codes are recorded in docs/MANUAL_ACTIONS.md; they are identifiers rather than secrets. The remaining half of the action stays open: /zoryvex/test/paystack/plan-codes does not exist yet and must be written after the billing infrastructure is applied, not before, or that apply can fail."
+    },
+    {
+      "name": "The billing apply has a plan and a rollback, and the rollback had to be captured rather than assumed",
+      "status": "PASS",
+      "detail": "Saved plan for the test environment: 45 to add, 55 to change, 0 to destroy. The deploy guards report no stateful destruction and no blanking regressions. The 45 creates are one billing system: four billing routes, the admin billing diagnostic, the hourly reconciliation job (created ENABLED at rate(1 hour)), two CloudWatch alarms, and the empty plan-codes parameter. The 55 changes are mostly not billing: 45 already-running Lambdas get today's code (35 code only, 10 code plus environment), which is the risk-register item about drifted bundles now measured rather than estimated; CloudFront's cache behaviour inverts so pages get a 60-second TTL and only /_next/static/* caches long, which is a correction because the old *.html rule never matched a static export's extensionless paths; and ten functions gain environment variables that exist in code but had never reached AWS. WEBAUTHN_RP_ID looked like a passkey-invalidating change and is not: all four functions currently hold an empty string, so founder step-up has never worked in TEST and this apply is what fixes it. Preparing the rollback surfaced the real hazard: api-route creates functions without publish, AWS keeps only $LATEST, and nothing records which commit built the deployed code, so the 45 code overwrites are irreversible from AWS. All 45 live packages were therefore downloaded and hash-verified against CodeSha256 twice by two separate code paths, every archive opened to prove it is not truncated, alongside the exact pre-apply state version, the CloudFront config and six IAM policies. scripts/capture-rollback-artifact.mjs makes that repeatable and refuses to record an unverified copy. Not exercised, and said so: the restore itself, because running update-function-code to prove a rollback works is the deployment the rollback exists to protect against. Also recorded: /zoryvex/test/last-good-commit does not exist, so the automatic app-code rollback has no anchor for this apply and the captured artifact is the rollback. Nothing has been applied."
+    },
+    {
+      "name": "Billing is applied to TEST, verified against the running environment rather than the apply log",
+      "status": "PASS",
+      "detail": "Founder approved after reading the plan, diff and rollback. Applied 45 created, 55 changed, 0 destroyed, as planned. Verified afterwards rather than assumed: a re-plan reported +0 ~0 -0, which is the proof the apply landed everything; site sync 248 uploaded, 56 deleted, 265 total; /health 200; all five new billing routes live and returning 401 to unauthenticated requests, so they fail closed behind the authorizer; the live pricing page carries 250,000 / 700,000 / 5,000,000 with no trace of 185,000 or 1,350,000 and the corrected business name Abba's Solutions with no trace of the old spelling; pages now serve max-age=0, must-revalidate instead of the old 24-hour default, so a deploy is visible rather than hidden behind a day of CDN cache. /zoryvex/test/last-good-commit now exists for the first time, so the automatic app-code rollback finally has an anchor. The captured rollback artifact was not needed and is retained."
+    },
+    {
+      "name": "The deploy script could not finish on Windows, and only a real apply could have found it",
+      "status": "PASS",
+      "detail": "terraform apply succeeded and the deploy then died on spawnSync npm ENOENT, between the apply and the site sync: infrastructure changed, site not synced, smoke test never run, last-good commit never recorded, and the automatic rollback correctly failed because no anchor existed. npm on Windows is a .cmd shim, so execFileSync('npm') raises ENOENT and blames npm rather than the shell. Mapping to npm.cmd produced EINVAL instead, because Node refuses .cmd and .bat without a shell since the 2024 argument-injection hardening. Two failures at the same step is the stop-guessing line, so the third attempt ran all four combinations in isolation first and confirmed only npm.cmd with shell:true works. Because a shell concatenates rather than escapes arguments, spawnPlanFor refuses any argument carrying a space or metacharacter instead of attempting Windows quoting that would be exercised rarely and wrong when it mattered. Six tests pin it, including that nothing changes on linux and darwin where CI runs. The bug was unreachable from validate:all, the unit suite and the e2e suite, none of which run deploy.mjs, and the script's header claimed end-to-end use that predated the site-build step."
+    },
+    {
+      "name": "The plan codes were stored as invalid JSON once, and reading them back is what caught it",
+      "status": "PASS",
+      "detail": "Passing the JSON as a PowerShell argument let the shell strip every double quote, storing {scout_founding_monthly:PLN_...}, which is not JSON and would have thrown in plan-code-repository at the first checkout rather than at write time. Rewritten with --cli-input-json from a file so no shell touches the quoting, then read back and parsed to prove it, not just written and trusted. All six keys present, version 3 is the good one. Written after the apply and never before, because Terraform creates the parameter empty with ignore_changes and a hand-created one can fail that apply."
+    },
+    {
+      "name": "payments and contactUnlocks are on in TEST, proved by running the job rather than reading the parameter",
+      "status": "PASS",
+      "detail": "Founder-authorized single AWS write. The complete declared intent from infrastructure/envs/test/main.tf was written, not a partial patch: payments true, contactUnlocks true, aiMatching false, publicDiscovery false, verificationReminders false. verificationReminders was absent from the live document and read false through the schema default; stating it explicitly removes that drift and is the safer of the two readings, since it gates email to real people. Written with --cli-input-json from a file after the plan-codes write showed that passing JSON as a PowerShell argument silently strips the quotes. scripts/check-feature-flags.mjs now reports the live document matches Terraform, where it previously reported two flags off and one absent. Proved in the running environment rather than from the parameter value: invoking zoryvex-test-billing-reconciliation returned skipped:false with no error, which means the deployed Lambda read the flag from Parameter Store through its IAM grant, resolved its dependencies, and queried the sparse open-payments GSI successfully. The first scheduled run an hour earlier had returned in 477ms writing nothing at all, because the skip path was silent and the flag was still off. A job that is switched off looked exactly like a job with nothing to do, so the skip now logs its reason. That case matters most during an emergency lockdown, which turns this flag off deliberately."
+    },
+    {
+      "name": "The repository and TEST looked in exact parity, and the measurement was platform-relative",
+      "status": "PASS",
+      "detail": "The longest-standing open risk in the register was that Lambda bundles on disk differed from what is deployed, so any future apply would carry a code deployment with it. It was closed by shipping them deliberately with a captured rollback, rather than by continuing to name them. Proved twice over: a plan-only run after the final deploy reports +0 ~0 -0, and the reconciliation function's deployed CodeSha256 compares byte-identical to the local bundle. Keeping it closed is the job of running a deploy after a merge, which is now possible on this machine for the first time, since scripts/deploy.mjs could not complete on Windows until today. The deploy also reports the live feature-flag document matching Terraform, so the two kinds of drift this project tracks are both at zero. CORRECTED 2026-09-01, later the same day: both measurements were taken on the machine that built the bundles, and neither meant what it was read to mean. The first CI deploy on the same commit planned +0 ~53 -0, and a local rebuild and plan immediately afterwards planned the same 53 back. Zip builds are deterministic on one platform and not across two, so a Windows-built and a Linux-built bundle of identical source hash differently. Nothing is broken by it and no data is at risk; what is lost is the signal, since a plan showing 53 changes meant only which machine ran it. The rule from here is the one slice 9 already wrote down: TEST is deployed by CI, not from a workstation."
+    },
+    {
+      "name": "Location filters matches, and the filter says what it costs",
+      "status": "PASS",
+      "detail": "Founder decision closing the fork open since the day's first message: location filters rather than merely informs. Role.constraints was free text hinted 'Location, timezone overlap, start date' that no code read, and the seeded roles saying 'Remote, Nigeria-based' and 'overlapping 4 hours with WAT' filtered nobody; candidates had no location field to filter against either. Now a candidate states a country and a working UTC offset, and a role states an allow-list of countries plus a maximum timezone distance from its own offset. Four choices recorded in docs/DECISIONS.md because each could have gone the other way: an allow-list and never a deny-list, since the two are the same arithmetic and only one stays a payroll question; location stated and never inferred, since an inferred location turns a payroll filter into a proxy for nationality; a candidate with no stated location never excluded, since dropping them would be a silent rejection caused by a schema change; and the filter reporting how many candidates it removed, since a shortlist that quietly got shorter looks like a platform with nobody on it. An already-unlocked match that stops fitting is kept rather than deleted or hidden, because it is the record of a purchase, and its rationale says why it no longer fits. 26 new tests across the pure fit function, the matcher, and the profile service, including the clock-wraparound case where UTC+13 and UTC-11 are the same time rather than 24 hours apart, and the null-versus-undefined case where clearing a location must REMOVE the attribute rather than store a DynamoDB NULL that the schema would then reject on read. The openapi parity guard caught both new fields missing from the document. Known limitation recorded rather than buried: a stored offset is not a timezone, so a DST region is an hour out for part of the year."
+    },
+    {
+      "name": "Location filtering is deployed to TEST, verified from the served site rather than the apply log",
+      "status": "PASS",
+      "detail": "Plan +0 ~52 -0: fifty Lambdas code-only, two IAM policies, nothing created or destroyed, no blanking. Fifty rather than the handful of handlers actually edited, because packages/contracts is bundled into every function, so a shared contract change legitimately touches every bundle. The two IAM changes were the only part the plan could not show in advance: their policy is derived from the Lambda ARN being updated, so Terraform marked the result unknown. Read back after the apply rather than assumed, and both are byte-identical in substance to before, still InvokeOwnFunctionOnly scoped to their single function, with no widening. Rollback captured first: fifty live packages downloaded and hash-verified against CodeSha256. Verified after: site sync 226 uploaded and 9 deleted, /health smoke test passed, feature flags still match Terraform, a plan-only re-run reports +0 ~0 -0 so repository and AWS are back in exact parity, matches-recompute's deployed CodeSha256 is byte-identical to the local bundle, and the new copy on both forms is genuinely being served: 'Where you work from' and 'Rather not say' on the candidate profile, 'Where this role can hire' and 'Countries you can employ in' on the new-role form, all fetched out of the live JavaScript chunks on test.zoryvex.space."
+    },
+    {
+      "name": "The first CI deploy failed closed on a permission the billing work never granted",
+      "status": "PASS",
+      "detail": "PR #74 merged to main as 51d02db and deploy-test failed. Cause read from the log rather than guessed: AccessDeniedException, assumed-role/zoryvex-test-deploy is not authorized for ssm:GetParameter on /zoryvex/test/paystack/plan-codes. The CI role's read grant is a list of exact literal parameter names rather than the /zoryvex/test/* namespace, deliberately, because the Paystack secret key sits under that same prefix and the role can write to it. Today's billing work added a third parameter to the environment and never to that list, and Terraform manages it, so every plan reads it. The design worked exactly as intended: it failed at plan, before changing anything, and it failed on the boundary that exists to keep CI away from the secret key. Nothing in AWS was modified. Fixed by adding only that one ARN to the existing statement; the plan is +0 ~1 -0, one resource, one statement, statement set otherwise unchanged, verified from the plan JSON rather than from the diff text. The live policy was captured first as a rollback artifact. Worth noting the chicken-and-egg this exposes: the permission CI needs is granted by Terraform, and Terraform in CI cannot run without it, so an admin session has to apply this one."
+    },
+    {
+      "name": "The first successful CI deploy, and the claim it disproved",
+      "status": "PASS",
+      "detail": "After the IAM fix, main deployed through the pipeline for the first time: plan +0 ~53 -0, apply complete, site sync 221 uploaded and 40 deleted of 265, /health smoke test passed, feature flags still matching Terraform, last-good-commit recorded. Every job green. The 53 were 51 Lambda functions differing on source_code_hash alone and the two scheduler policies that are always unknown at plan time. It was predicted as +0 ~0 -0 and said so in advance, including that a different number would mean the cross-platform determinism claim was wrong. It was wrong. Rebuilding on the workstation and planning again produced the same 53 in the other direction, which is the measurement that settles it rather than an inference. The earlier 'exact parity' check has been corrected in place rather than left to disagree with this one, and docs/RISK_REGISTER.md's closed drift row is reopened with the real cause and an operating rule: TEST is deployed by CI, not from a workstation. A local terraform apply is now what reintroduces the drift."
+    },
+    {
+      "name": "A CI deploy failed on two variables a gitignored file had been supplying",
+      "status": "PASS",
+      "detail": "The public proof page merged and deploy-test failed at plan with 'No value for required variable', twice. The two new package-path variables were declared without defaults and given values in infrastructure/envs/test/terraform.tfvars, which is gitignored, so they existed on this workstation and never on a runner. Every other package-path variable carries a default pointing at the deterministic dist path, which is the convention this missed. Same shape as the parity mistake earlier: something true locally, read as true everywhere. Fixed by adding the two defaults. A new guard, scripts/lib/tf-var-supply.test.mjs, asserts that no test variable is left for a gitignored file to supply, and its third test replays the broken declaration to prove it catches it. The first draft of that guard was wrong twice and both errors are recorded in it: it checked production, which declares no defaults by design and is never deployed by this workflow, and it flagged empty defaults, which are a legitimate sentinel here since webauthn_rp_id defaults to empty so main.tf can derive it from app_origin's host. Checked against live AWS rather than assumed: WEBAUTHN_RP_ID survived the CI deploy as test.zoryvex.space, which is what proved the empty-default rule wrong."
+    },
+    {
+      "name": "The public proof page is deployed, dark, and does not let a traversal past the authorizer",
+      "status": "PASS",
+      "detail": "Plan +14 ~52 -0, which is two Lambdas at seven resources each plus every bundle rebuilt because packages/contracts changed, and the two scheduler policies that are always unknown at plan time. Apply clean, site sync 231 uploaded and 7 deleted of 272, /health smoke test passed, feature flags still matching Terraform. Verified against the running environment rather than the log. The feature is dark as designed: no pointer rows exist, so a fabricated id, an internal-looking id and the badge route all return an identical 404, 'No public proof page here', with no way to tell which reason applies. A path traversal was investigated properly rather than waved away after fetch() reported 200: fetch normalises '../' per the URL spec so the request never left the machine, and sending raw unnormalised paths showed API Gateway normalising them itself before routing. The security question was whether that normalisation could reach an authenticated route without a session, and it cannot — /billing, /admin/billing and /candidates/me each return 401 whether reached directly or through a traversal, so the authorizer applies to the resolved route. The 200 was API Gateway resolving to /health, which is public anyway. Copy confirmed served from the live JavaScript chunks on both routes: 'What this page does not tell you' and 'we will not say which' on /proof, and 'Publish a public proof page' and 'Turning this off destroys the link' on the profile."
+    },
+    {
+      "name": "The evidence hierarchy is ordered by resistance to faking, founder-decided",
+      "status": "PASS",
+      "detail": "The verification brief put peer verification near the top of its eight levels, which was harmless while the order was only a label. Ranking began using it on 2026-09-02, so a level's position now decides who an employer sees first, and under the brief's order a peer attestation would have outranked a machine-verified outcome: the most collusion-prone signal above the hardest to fake, inverting the brief's own stated preference for machine-verified outcome over opinion. The two halves of the brief disagreed once the order became load-bearing. Put to the founder with that consequence stated rather than resolved quietly, and they chose to keep the new order: claimed, peer verified, knowledge assessed, skill demonstrated, process observed, outcome verified, work corroborated, continuously verified. Peer verification is not demoted out of scepticism about colleagues; it is attributable testimony from somebody who proved control of an address at the organisation the work was done at, and it sits below the machine checks because a colleague can be mistaken, or a friend. A test asserts it can never outrank a machine-verified outcome, so this cannot drift back by accident, and reordering is now a founder decision with an entry in docs/DECISIONS.md, the same as a price, because it moves who gets seen."
+    }
+  ],
+  "blockers": [
+    "Phase 7 slice 10 (load/quota) only: reserved concurrency was never configured on any Lambda (all 37 run at -1) so there is nothing to demonstrate; no documented SLO exists in this repo to measure against; and the Lambda concurrency quota-increase case must not be polled without separate founder authorization. This is genuinely blocked pending founder direction (e.g. authorize the quota poll, or accept the synthetic load-quota model alone as sufficient and formally scope down slice 10's acceptance) — not something to resolve unilaterally. Slice 11 (all of Phase 7's TEST-acceptance gates) is fully closed as of 2026-08-26 and no longer blocks anything."
+  ],
+  "loopMode": "none",
+  "cumulativeGoalTurnCount": 11,
+  "consecutiveIdenticalFailureCount": 0,
+  "goalTurnLimit": 12,
+  "pollingCheckLimit": 6,
+  "usagePauseState": "none",
+  "resolvedProjectPath": "C:\\Users\\zerah\\Documents\\zoryvex",
+  "repository": {
+    "remoteHost": "github.com",
+    "name": "zoryvex-platform",
+    "owner": "<REDACTED — personal account, verified via gh auth status to match local git identity>",
+    "branch": "main",
+    "upstream": "origin/main",
+    "mergeState": "clean, no in-progress operation",
+    "lastGoodCommit": "4ad9055"
+  },
+  "intentionalWorkingTreeSummary": "Phase 7 slices 1-10 (of 11 planned) landed on main via PR #16 through #41, 20 further PRs (#42-#61) landed through 2026-08-22, PR #62 through #70 landed 2026-08-25, and 14 further commits (65fe219..bc62c3c, the full-product audit pass) landed 2026-08-26 — pushed directly to main by explicit founder authorization despite the exhausted Actions budget, so CI never ran for any of them (see the dedicated checks row above). Local main is fast-forwarded to origin/main at bc62c3c (confirmed 0/0 divergence); working tree is clean. Several local branches from this session's already-merged PRs still exist locally (harmless, not deleted, remote counterparts auto-deleted by delete_branch_on_merge). Also present and untracked: .terraform-plans/. Precisely what was inspected there, and what was not: for every *.tfplan artifact, ONLY the filename, size, timestamp and git-ignore status were looked at — no plan CONTENTS were ever opened, and .gitignore line 24 (*.tfplan) covers them all. The one file that is untracked and NOT ignored is .terraform-plans/test/last-good-commit.txt; its CONTENT was likewise never opened either — its described purpose (rollback bookkeeping holding a commit SHA) is an INFERENCE from its filename plus this repo's documented deploy/rollback behavior, not something read from the file, and it should be treated as unverified until someone actually looks. Nothing in .terraform-plans/ was modified, staged, or deleted this session.",
+  "dependencyLockHash": null,
+  "baselineTestEvidence": "IMPORTANT: a green CI run or a merged PR is evidence of Implemented, never of a passed acceptance gate — see the EVIDENCE TAXONOMY row in checks. npm run validate:all was green before each of PR #16-#41's merge, and each PR's own ci.yml run (Validate + Playwright e2e/accessibility) completed successfully (verified via gh run list/gh pr checks). Beyond CI, slice 11 additionally exercised the real, live TEST environment directly (not build/compile alone): real HTTP calls to test-api.zoryvex.space for /auth/request-code and /auth/consume-code, a real SES email received and its magic-link token used, real S3 presigned-POST upload + GuardDuty-scan-clean transition + presigned-GET download with SHA-256 byte-for-byte integrity verified, and direct CloudWatch/DynamoDB/SSM/Lambda AWS-CLI evidence used to root-cause each of the three real bugs found (never guessed).",
+  "changedFileList": [
+    ".zoryvex/state.json",
+    "docs/MANUAL_ACTIONS.md"
+  ],
+  "lastCommandResult": "Production planned for the first time and now succeeds: 434 to add, 0 to change, 0 to destroy, from four derivable inputs. Test still plans +0 ~58 -0. validate:all green across all 24 steps.",
+  "inFlightProcessesOrJobs": [],
+  "lastVerifiedCheckpoint": "PRE-DEPLOYMENT GATE PASSED with section B empty. Evidence: clean build from deleted output, 2285 unit tests, 257 e2e desktop and mobile, seven WCAG 2.2 AA suites, a new layout and target-size sweep over 27 routes at two viewports, validate:all all 24 steps, 0 dependency vulnerabilities, secret scan clean, Terraform policy clean, production plan 434 to add 0 to destroy, test plan +0 ~58 -0.",
+  "nextSafeAction": "EIGHT AUDIT COMMITS ARE BEING PUSHED TO main, WHICH DEPLOYS TEST. The founder ran an eight-phase audit (freeze/audit, workflows, interactive elements, Paystack, security, UI/UX, regression, deployment gate) and the deployment gate is PASSED with section B empty. Application fixes: organization names now come from the email domain rather than the person, because the old form was emailed to every candidate whose proof an employer opened; both consent toggles now guard against an in-flight second click; three standalone links and every checkbox and radio now meet WCAG 2.2 target size, the checkboxes having silently rendered 13px wide because a flex parent took the width back; two disabled buttons say why; and subscription checkout now confirms the plan price with Paystack before opening a checkout, because attaching a plan makes Paystack ignore the amount and charge the plan instead, reproduced live. Infrastructure: production was unplannable and is now plannable, production owns its GuardDuty role and reads the shared detector, the public proof page and badge were missing and are added, and HSTS is on from the first apply with preload still false. THE PRODUCTION APPLY HAS STILL NOT HAPPENED and production still has no Terraform state. It needs two applies by nature, not one: Stage A now, Stage B once ACM certificates exist, because a distribution cannot reference a certificate that is not yet validated. MANUAL ACTIONS REMAIN AND ONLY THE FOUNDER CAN DO THEM: two ACM certificates and their DNS validation at Vercel, production DNS, the live Paystack secret key, live Paystack plans and the plan-codes parameter, the production webhook URL in the Paystack dashboard, and the auth-token pepper after apply. CAC, NRS and NDPC remain NOT AUTHORIZED BY FOUNDER and still block PHASE 10 COMMERCIAL GO. Paystack remains in TEST mode throughout and was never switched.",
+  "founderGovernmentActionAuthorization": false,
+  "paystackFounderStatus": "LIVE_ACTIVE",
+  "paystackDashboardVerification": "VERIFIED — Live, Starter Business, payouts enabled, trading name already \"Abba's Solutions\" (recorded as 'Abbas Solution' until 2026-09-01, when the founder read the dashboard and corrected it), no isolation conflict (2026-08-15)",
+  "authorizedLaunchModes": [
+    "CONDITIONAL_COMMERCIAL",
+    "SAFE_TECHNICAL_NEUTRAL_STATUS"
+  ],
+  "selectedLaunchMode": null,
+  "nigerianObligations": {
+    "CAC": "NOT AUTHORIZED BY FOUNDER",
+    "NRS_TAX": "NOT AUTHORIZED BY FOUNDER",
+    "NDPC_DPIA": "NOT AUTHORIZED BY FOUNDER"
+  }
+}

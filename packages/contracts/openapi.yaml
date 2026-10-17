@@ -1,0 +1,3118 @@
+openapi: 3.1.0
+info:
+  title: Zoryvex API
+  version: 0.2.0
+  description: >
+    Contract for the Zoryvex proof-first hiring platform API: one API Gateway HTTP API, one Lambda
+    per route, AWS_PROXY integration.
+
+
+    Every path here exists in `infrastructure/envs/test/main.tf` as a `route_key`, and
+    `scripts/check-openapi-coverage.mjs` fails the build if that stops being true in either
+    direction. Component schemas mirror `packages/contracts`, and
+    `packages/contracts/tests/openapi-schema-parity.test.ts` fails if a zod schema and its
+    documented shape drift apart. Neither check existed before 2026-08-30, which is how this file
+    came to describe one endpoint out of forty-one.
+
+
+    Error bodies are uniform: `{ "error": CODE, "message": string }`, produced by
+    `services/api/src/adapter/http.ts` from the typed errors in
+    `services/api/src/errors/typed-errors.ts`. A 500 never carries internal detail, only the
+    generic "Unexpected error".
+servers:
+  - url: https://test-api.zoryvex.space
+    description: Test
+  - url: https://api.zoryvex.space
+    description: Production (configured, not yet deployed)
+
+tags:
+  - name: Health
+  - name: Auth
+    description: Passwordless email sign-in and sessions, per docs/adr/0001.
+  - name: WebAuthn
+    description: Founder-admin step-up. No other role can reach these.
+  - name: Candidate
+  - name: Evidence files
+  - name: Privacy
+  - name: Employer roles
+  - name: Matching
+  - name: Proof Hiring Kit
+  - name: Admin
+  - name: Webhooks
+
+security:
+  - sessionCookie: []
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Liveness check
+      description: >
+        No auth, no state read. One of three unauthenticated GETs in this API, alongside a
+        candidate's public proof page and its badge, which read state but only what a
+        candidate has explicitly consented to publish.
+      security: []
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+
+  /evidence/{evidenceId}/peer-requests:
+    parameters:
+      - name: evidenceId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: requestPeerAttestation
+      tags: [Verification]
+      summary: Ask a colleague to confirm a claim
+      description: >
+        Sends one message to a work address asking somebody to confirm what the candidate says they
+        did. An anonymous domain and the candidate's own address are both refused before anything is
+        sent, so nobody is asked to fill in a form whose answer was always going to be rejected.
+        Bounded per candidate rather than per recipient: the abuse worth preventing is one person
+        emailing many addresses. The link carries a single-use token in its fragment, expires in 72
+        hours, and never appears in a request path.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verifierEmail]
+              properties:
+                verifierEmail: { type: string, format: email }
+      responses:
+        '200':
+          description: The message was sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requested]
+                properties:
+                  requested: { type: boolean, enum: [true] }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /peer-attestations/preview:
+    post:
+      operationId: previewPeerRequest
+      tags: [Verification]
+      summary: What you are being asked to confirm
+      description: >
+        Unauthenticated: a verifier has no account and should never need one to answer a question
+        about somebody else's work. POST rather than GET so the token travels in a body rather than
+        a URL that access logs and browser history would keep. Deliberately does not spend the
+        token, so somebody can read the claim, close the tab, think, and come back. Every failure —
+        unknown, already used, expired — returns the same refusal.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 20 }
+      responses:
+        '200':
+          description: The claim, and who is asking.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidateName, claim]
+                properties:
+                  candidateName: { type: string }
+                  claim: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /peer-attestations/confirm:
+    post:
+      operationId: confirmPeerAttestation
+      tags: [Verification]
+      summary: Confirm a claim
+      description: >
+        Spends the token and records the attestation. The verifier's email address comes from the
+        stored request and is never accepted from the body — accepting one from whoever is posting
+        would make the round trip decorative. The attestation rules still apply after the token
+        checks out: self-attestation, reciprocity rings, and a second confirmation from the same
+        person are all still refused. The address is never stored; the organisation's domain is.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, relationship, statement]
+              properties:
+                token: { type: string, minLength: 20 }
+                relationship: { $ref: '#/components/schemas/PeerRelationship' }
+                statement: { type: string, minLength: 1, maxLength: 600 }
+      responses:
+        '200':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [confirmed, evidenceId]
+                properties:
+                  confirmed: { type: boolean, enum: [true] }
+                  evidenceId: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /public/proof/{publicProofId}:
+    parameters:
+      - name: publicProofId
+        in: path
+        required: true
+        schema: { type: string }
+        description: >
+          The opaque, revocable id a candidate was issued when they turned this page on. It is the
+          only credential this route has, which is why it is single-purpose and destroyed on
+          opt-out.
+    get:
+      operationId: getPublicProof
+      tags: [Public]
+      summary: A candidate's public proof page
+      description: >
+        Unauthenticated by design: a page nobody can read without an account is not a page a
+        candidate can carry anywhere. Verification is re-checked against the clock on every read,
+        so a credential that lapsed this morning stops appearing this morning. Every failure — an
+        id that never existed, one whose consent was withdrawn, a candidate since deleted —
+        returns the same 404, so the URL cannot be used to ask whether an account exists.
+      security: []
+      responses:
+        '200':
+          description: The page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicProof' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /public/proof/{publicProofId}/badge.svg:
+    parameters:
+      - name: publicProofId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPublicProofBadge
+      tags: [Public]
+      summary: The carryable mark, as an SVG
+      description: >
+        An image a candidate can embed on a README or a personal site. Generated on every request
+        from the same read the page uses, so the badge and the page can never disagree. It carries
+        a count and the date of the most recent check rather than the word "verified", because a
+        badge implying permanence is a lie about how credentials work. Cached for five minutes
+        only: this exists to say when something was last checked, and a CDN holding it for a day
+        would make it assert a freshness it does not have. A revoked page makes this 404, so a
+        mark embedded elsewhere breaks visibly when consent is withdrawn.
+      security: []
+      responses:
+        '200':
+          description: The badge.
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/request-code:
+    post:
+      operationId: requestSignInCode
+      tags: [Auth]
+      summary: Send a sign-in link to an email address
+      description: >
+        Always reports the same result whether or not the address is known, so this cannot be used
+        to enumerate accounts. Rate-limited per email and per source IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, intendedRole]
+              properties:
+                email: { type: string, format: email }
+                intendedRole:
+                  type: string
+                  enum: [candidate, employer_admin]
+      responses:
+        '200':
+          description: Accepted. Says nothing about whether the address exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requested]
+                properties:
+                  requested: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403':
+          description: The request did not come from the app's own origin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/consume-code:
+    post:
+      operationId: consumeSignInCode
+      tags: [Auth]
+      summary: Exchange a sign-in token for a session
+      description: >
+        Deliberately a POST, not the GET the emailed link points at: the link does not consume the
+        token by itself. The web app reads the token from `location.hash`, clears the hash, then
+        posts it here. The token is single-use and consumed atomically.
+
+
+        On success the session arrives as a `__Host-` prefixed, HttpOnly, Secure cookie the client
+        cannot read. The CSRF token in the body is the client's half of the pair, and must be sent
+        as `X-Zoryvex-Csrf` on every later mutating request.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Session issued. Sets the session cookie.
+          headers:
+            Set-Cookie:
+              description: '`__Host-` prefixed session cookie, HttpOnly and Secure.'
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account, csrfToken]
+                properties:
+                  account:
+                    type: object
+                    required: [id, email, role]
+                    properties:
+                      id: { type: string }
+                      email: { type: string, format: email }
+                      role: { $ref: '#/components/schemas/AccountRole' }
+                      candidateId: { type: string }
+                      employerId: { type: string }
+                  csrfToken: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401':
+          description: The token is wrong, expired, or already used. The three are indistinguishable by design.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: The request did not come from the app's own origin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/sign-out:
+    post:
+      operationId: signOut
+      tags: [Auth]
+      summary: End the current session
+      description: Idempotent. Signing out with no session, or an already-invalid one, still succeeds.
+      security: []
+      responses:
+        '200':
+          description: Signed out. Expires the session cookie.
+          headers:
+            Set-Cookie:
+              description: Expired session cookie.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [signedOut]
+                properties:
+                  signedOut: { type: boolean, const: true }
+        '403':
+          description: The request did not come from the app's own origin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/session:
+    get:
+      operationId: getSession
+      tags: [Auth]
+      summary: Who am I, and a fresh CSRF token
+      description: >
+        The session cookie is HttpOnly, so a browser app cannot read who it is signed in as. This
+        answers that, and re-issues a session-bound CSRF token at the same time — a page reload
+        discards whatever the client held in memory, and this is what re-establishes a working one
+        without a second sign-in.
+      responses:
+        '200':
+          description: The current session.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SessionContext'
+                  - type: object
+                    required: [csrfToken]
+                    properties:
+                      csrfToken: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/webauthn/register/options:
+    post:
+      operationId: beginWebAuthnRegistration
+      tags: [WebAuthn]
+      summary: Start registering a founder-admin passkey
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: WebAuthn `PublicKeyCredentialCreationOptionsJSON`, passed straight to the browser.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/FounderAdminOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/webauthn/register/verify:
+    post:
+      operationId: finishWebAuthnRegistration
+      tags: [WebAuthn]
+      summary: Complete registering a founder-admin passkey
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        description: The browser's `RegistrationResponseJSON`.
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Passkey registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registered]
+                properties:
+                  registered: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/FounderAdminOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/webauthn/step-up/options:
+    post:
+      operationId: beginWebAuthnStepUp
+      tags: [WebAuthn]
+      summary: Start a founder-admin step-up
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: WebAuthn `PublicKeyCredentialRequestOptionsJSON`.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/FounderAdminOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/webauthn/step-up/verify:
+    post:
+      operationId: finishWebAuthnStepUp
+      tags: [WebAuthn]
+      summary: Complete a founder-admin step-up
+      description: >
+        Marks the session stepped-up. Sensitive admin routes additionally check the step-up is
+        recent, so the privilege does not last the whole session.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        description: The browser's `AuthenticationResponseJSON`.
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Step-up complete.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [steppedUp]
+                properties:
+                  steppedUp: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/FounderAdminOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me:
+    get:
+      operationId: getOwnCandidateProfile
+      tags: [Candidate]
+      summary: Read the signed-in candidate's profile
+      responses:
+        '200':
+          description: The candidate and its current version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      operationId: updateOwnCandidateProfile
+      tags: [Candidate]
+      summary: Update the signed-in candidate's profile
+      description: >
+        `version` is the optimistic-concurrency check. A stale version is a 409, never a silent
+        overwrite of somebody else's edit.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 0 }
+                displayName: { type: string, minLength: 1 }
+                launchTrack: { $ref: '#/components/schemas/LaunchTrack' }
+                summary: { type: string }
+                onboardingComplete: { type: boolean }
+                location:
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/CandidateLocation'
+                  description: >
+                    null withdraws it. undefined would mean this update does not mention
+                    location, which would leave a previously stated one in place and make it
+                    impossible to take back.
+                phone:
+                  type: string
+                  nullable: true
+                  description: null takes the number down. Validated to the same shape the form uses.
+                linkedinUrl:
+                  type: string
+                  nullable: true
+                  description: A LinkedIn profile URL, or null to remove it.
+                websiteUrl:
+                  type: string
+                  nullable: true
+                  description: A personal site, or null to remove it.
+                intent:
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/CandidateIntent'
+                  description: >
+                    What kind of work they are open to and what they need to be paid. null
+                    withdraws the whole statement. Withdrawing costs them nothing, because an
+                    unstated preference is never held against them, and that is what makes
+                    stating one safe.
+      responses:
+        '200':
+          description: The updated candidate and its new version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedCandidate' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/consent:
+    patch:
+      operationId: updateConsent
+      tags: [Privacy]
+      summary: Change discovery and contact-sharing consent
+      description: >
+        Opting out of discovery also withdraws the candidate from every open match — matches where
+        contact has already been unlocked are kept, because that disclosure has already happened
+        and pretending otherwise would be dishonest to both sides.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                discoveryOptIn: { type: boolean }
+                contactUnlockConsent: { type: boolean }
+                publicProof:
+                  type: boolean
+                  description: >
+                    Whether the public proof page exists at all. It goes through this audited
+                    endpoint rather than somewhere quieter precisely so it is reviewed beside
+                    the other two.
+      responses:
+        '200':
+          description: The candidate after the change.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Candidate' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/delete:
+    post:
+      operationId: requestOwnDeletion
+      tags: [Privacy]
+      summary: Request deletion of the signed-in candidate's data
+      description: >
+        Queued, not immediate: the worker removes DynamoDB items, evidence objects and derived AI
+        artifacts, while retaining the minimised billing and audit records
+        docs/PRIVACY_AND_RETENTION.md requires. Answers 202 because the work has been accepted, not
+        finished.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '202':
+          description: Deletion accepted and queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted]
+                properties:
+                  accepted: { type: boolean, const: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/evidence:
+    get:
+      operationId: listOwnEvidence
+      tags: [Candidate]
+      summary: List the signed-in candidate's evidence claims
+      responses:
+        '200':
+          description: Every evidence claim belonging to this candidate.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Evidence' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: createOwnEvidence
+      tags: [Candidate]
+      summary: Add an evidence claim
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source, claim, context, actions, outcome, visibility, consentGiven]
+              properties:
+                source: { $ref: '#/components/schemas/EvidenceSource' }
+                claim: { type: string, minLength: 1 }
+                context: { type: string, minLength: 1 }
+                actions: { type: string, minLength: 1 }
+                outcome: { type: string, minLength: 1 }
+                visibility: { $ref: '#/components/schemas/EvidenceVisibility' }
+                consentGiven: { type: boolean }
+                sourceUrl: { type: string, format: uri }
+                fileId:
+                  type: string
+                  description: >
+                    An id from POST /evidence/upload-requests, never a storage key. Whether the
+                    file is this candidate's, cleared the malware scan and left quarantine is
+                    decided against the stored record, not from this value.
+      responses:
+        '200':
+          description: The created claim and its version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedEvidence' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/evidence/{evidenceId}:
+    parameters:
+      - $ref: '#/components/parameters/EvidenceId'
+    get:
+      operationId: getOwnEvidence
+      tags: [Candidate]
+      summary: Read one of the signed-in candidate's evidence claims
+      responses:
+        '200':
+          description: The claim and its version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedEvidence' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      operationId: updateOwnEvidence
+      tags: [Candidate]
+      summary: Edit an evidence claim
+      description: >
+        Editing the substance of a verified claim resets it to unverified. A claim that has been
+        checked and then rewritten has not been checked.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 0 }
+                claim: { type: string, minLength: 1 }
+                context: { type: string, minLength: 1 }
+                actions: { type: string, minLength: 1 }
+                outcome: { type: string, minLength: 1 }
+                visibility: { $ref: '#/components/schemas/EvidenceVisibility' }
+                consentGiven: { type: boolean }
+      responses:
+        '200':
+          description: The updated claim and its new version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedEvidence' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteOwnEvidence
+      tags: [Candidate]
+      summary: Delete an evidence claim
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/evidence/{evidenceId}/verify/begin:
+    parameters:
+      - $ref: '#/components/parameters/EvidenceId'
+    post:
+      operationId: beginRepoVerification
+      tags: [Candidate]
+      summary: Get a one-time nonce for proving repository ownership
+      description: >
+        Returns a nonce the candidate publishes in a gist, which the verify call then checks
+        against the repository's owner. The nonce is single-use and short-lived.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: The nonce and what to do with it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nonce, fileName, instructions, expiresInMinutes]
+                properties:
+                  nonce: { type: string }
+                  fileName: { type: string }
+                  instructions:
+                    type: array
+                    items: { type: string }
+                  expiresInMinutes: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/evidence/{evidenceId}/verify:
+    parameters:
+      - $ref: '#/components/parameters/EvidenceId'
+    post:
+      operationId: verifyEvidence
+      tags: [Candidate]
+      summary: Verify an evidence claim
+      description: >
+        Three methods, each checked against a third party rather than taken on trust. A failure
+        reports whether it is retryable, because "we checked and it did not pass" and "we could not
+        check right now" are different things to tell a candidate about their own work.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [method, badgeUrl]
+                  properties:
+                    method: { type: string, const: issuer_badge }
+                    badgeUrl: { type: string, minLength: 1, maxLength: 2048 }
+                - type: object
+                  additionalProperties: false
+                  required: [method, gistUrl, repoUrl]
+                  properties:
+                    method: { type: string, const: repo_ownership }
+                    gistUrl: { type: string, minLength: 1, maxLength: 2048 }
+                    repoUrl: { type: string, minLength: 1, maxLength: 2048 }
+                - type: object
+                  additionalProperties: false
+                  required: [method, taskId, submission]
+                  properties:
+                    method: { type: string, const: graded_task }
+                    taskId: { type: string, minLength: 1, maxLength: 128 }
+                    submission: { type: string, minLength: 1, maxLength: 65536 }
+              discriminator:
+                propertyName: method
+      responses:
+        '200':
+          description: >
+            The verification outcome. A failed check is a 200 with `verified: false`, not an
+            error — the request was fine, the claim did not pass.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [verified, method, verificationRef, detail]
+                    properties:
+                      verified: { type: boolean, const: true }
+                      method: { $ref: '#/components/schemas/VerificationMethod' }
+                      verificationRef: { type: string }
+                      detail: { type: string }
+                  - type: object
+                    required: [verified, retryable, reason, whatToDo]
+                    properties:
+                      verified: { type: boolean, const: false }
+                      retryable: { type: boolean }
+                      reason: { type: string }
+                      whatToDo: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/export:
+    get:
+      operationId: exportOwnData
+      tags: [Privacy]
+      summary: Export everything held about the signed-in candidate
+      description: >
+        Files are listed by metadata only. A storage key or a raw URL is never returned here, the
+        same rule applied everywhere else in this API.
+      responses:
+        '200':
+          description: The candidate's own data.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CandidateExport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /candidates/me/graded-task:
+    get:
+      operationId: getGradedTasks
+      tags: [Candidate]
+      summary: The graded practical tasks offered for this candidate's track
+      description: >
+        Task briefs are per-candidate: the parameters are derived from the candidate's own id, so
+        two people never get an identical submission to copy.
+      responses:
+        '200':
+          description: The offered tasks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: '#/components/schemas/OfferedTask' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /evidence/upload-requests:
+    post:
+      operationId: requestEvidenceUpload
+      tags: [Evidence files]
+      summary: Get a presigned POST for uploading an evidence file
+      description: >
+        The upload goes to a quarantine prefix with a content-length range and an allowlisted MIME
+        type. Nothing is readable until a malware scan has explicitly marked it clean; anything
+        else is treated as not yet safe rather than accepted by default.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [fileName, mimeType, sizeBytes]
+              properties:
+                fileName: { type: string, minLength: 1 }
+                mimeType: { type: string, minLength: 1 }
+                sizeBytes: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: The file id and the presigned POST to send the bytes to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fileId, upload]
+                properties:
+                  fileId: { type: string }
+                  upload:
+                    type: object
+                    required: [url, fields]
+                    properties:
+                      url: { type: string, format: uri }
+                      fields:
+                        type: object
+                        additionalProperties: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /evidence/files/{fileId}/download:
+    parameters:
+      - name: fileId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: downloadEvidenceFile
+      tags: [Evidence files]
+      summary: Get a short-lived presigned URL for an accepted evidence file
+      description: Ownership is checked server-side. A file that has not passed its scan is not downloadable.
+      responses:
+        '200':
+          description: A short-lived presigned GET URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CandidateOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles:
+    get:
+      operationId: listOwnRoles
+      tags: [Employer roles]
+      summary: List the signed-in employer's roles
+      responses:
+        '200':
+          description: Every role belonging to this employer.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: createOwnRole
+      tags: [Employer roles]
+      summary: Create a role
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [launchTrack, title, seniority, outcomes, mustHaveWork]
+              properties:
+                launchTrack: { $ref: '#/components/schemas/LaunchTrack' }
+                title: { type: string, minLength: 1 }
+                seniority: { $ref: '#/components/schemas/Seniority' }
+                outcomes: { type: string, minLength: 1 }
+                mustHaveWork:
+                  type: array
+                  minItems: 1
+                  items: { type: string, minLength: 1 }
+                constraints: { type: string }
+                locationRequirement: { $ref: '#/components/schemas/RoleLocationRequirement' }
+                intent:
+                  allOf:
+                    - $ref: '#/components/schemas/RoleIntent'
+                  description: >
+                    What kind of engagement this is and what it pays. Absent means the employer
+                    has published no range, which the product says plainly rather than leaving a
+                    blank where a number should be.
+      responses:
+        '200':
+          description: The created role and its version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedRole' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      operationId: getOwnRole
+      tags: [Employer roles]
+      summary: Read one of the signed-in employer's roles
+      description: >
+        A role that does not exist and a role belonging to another employer both answer 404, so
+        this cannot confirm that another organisation's role exists.
+      responses:
+        '200':
+          description: The role and its version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedRole' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      operationId: updateOwnRole
+      tags: [Employer roles]
+      summary: Update a role
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 0 }
+                title: { type: string, minLength: 1 }
+                seniority: { $ref: '#/components/schemas/Seniority' }
+                outcomes: { type: string, minLength: 1 }
+                mustHaveWork:
+                  type: array
+                  minItems: 1
+                  items: { type: string, minLength: 1 }
+                constraints: { type: string }
+                locationRequirement:
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/RoleLocationRequirement'
+                  description: null removes the requirement, so it can be withdrawn and not only added.
+                intent:
+                  nullable: true
+                  allOf:
+                    - $ref: '#/components/schemas/RoleIntent'
+                  description: >
+                    null withdraws what was published. Clearing both ends of a pay range takes
+                    the range down rather than storing a zero, which would be a claim about pay
+                    where an absent range is not.
+                status: { $ref: '#/components/schemas/RoleStatus' }
+      responses:
+        '200':
+          description: The updated role and its new version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionedRole' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/kit-preview:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      operationId: getKitPreview
+      tags: [Proof Hiring Kit]
+      summary: Free proof-gap preview for a role
+      description: >
+        Useful on its own and deliberately incomplete. It never names a candidate, never invents
+        one, and never implies a payment has happened.
+      responses:
+        '200':
+          description: The proof-gap preview.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProofGapPreview' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/kit-status:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      operationId: getKitStatus
+      tags: [Proof Hiring Kit]
+      summary: Whether this role's Kit has been bought
+      description: >
+        Answers the question an employer actually has — "did I get the Kit" — so a role with only
+        failed or abandoned attempts reports `none` rather than exposing attempt history.
+      responses:
+        '200':
+          description: The Kit status for this role.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [succeeded, none] }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/kit-orders:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    post:
+      operationId: createKitOrder
+      tags: [Proof Hiring Kit]
+      summary: Start a Kit purchase
+      description: >
+        Creates a pending order and initialises a real Paystack transaction, returning the URL to
+        redirect the employer to. Test mode or live mode is decided entirely by which secret key is
+        configured; there is no code branch on environment anywhere in this codebase.
+
+
+        Requires an `Idempotency-Key`. Retrying with the same key re-initialises the same
+        unfinished order rather than creating a second one.
+
+
+        Payments are securely processed by Paystack under our business name, Abba's Solutions.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The order and where to send the employer next.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order, created, authorizationUrl]
+                properties:
+                  order: { $ref: '#/components/schemas/KitOrder' }
+                  created:
+                    type: boolean
+                    description: False when an idempotent retry returned the existing order.
+                  authorizationUrl: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: >
+            Not an employer admin, or the `payments` feature flag is off. The flag's refusal says
+            plainly that nothing has been charged, and it is checked before the order is created
+            and before Paystack is contacted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: This role already has a paid Kit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/kit:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      operationId: downloadKit
+      tags: [Proof Hiring Kit]
+      summary: The generated Kit document
+      description: >
+        HTML with a print stylesheet, served inline by default. "Download" is the same file with a
+        content-disposition attachment; "print to PDF" is the browser's own. No PDF service and no
+        third-party account is involved.
+      parameters:
+        - name: download
+          in: query
+          required: false
+          schema: { type: string, enum: ['true'] }
+          description: Send `true` to get it as an attachment rather than inline.
+      responses:
+        '200':
+          description: The Kit document.
+          content:
+            text/html:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404':
+          description: No Kit has been generated for this role yet, or the role is not this employer's.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/kit/regenerate:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    post:
+      operationId: regenerateKit
+      tags: [Proof Hiring Kit]
+      summary: Generate a new version of a purchased Kit
+      description: >
+        Requires an already-succeeded order — regeneration is never free. Every generation is a new
+        immutable version; a previously delivered one is never overwritten.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: The new version.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, generatedAt]
+                properties:
+                  version: { type: integer, minimum: 1 }
+                  generatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not an employer admin, or no paid Kit exists for this role yet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      operationId: listMatchesForRole
+      tags: [Matching]
+      summary: The matches computed for a role
+      responses:
+        '200':
+          description: This role's matches.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Match' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches/recompute:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    post:
+      operationId: recomputeMatches
+      tags: [Matching]
+      summary: Recompute this role's matches
+      description: >
+        Deterministic and explainable: fixed weights over structured evidence and the role's stated
+        requirements. Only candidates who have opted into discovery are considered, and no model is
+        trained on anybody's data.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: >
+            The recomputed matches, and how many candidates the role's location requirement
+            removed from them. The count is reported rather than merely applied, so an employer
+            can see what a filter is costing them instead of quietly receiving a shorter list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matches, locationExcluded]
+                properties:
+                  matches:
+                    type: array
+                    items: { $ref: '#/components/schemas/Match' }
+                  locationExcluded:
+                    type: integer
+                    minimum: 0
+                    description: >
+                      Candidates whose evidence met this role's requirements and who were removed
+                      only by its location requirement. Candidates who have not stated a location
+                      are never counted here, because they are never excluded.
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches/{candidateId}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/CandidateId'
+    get:
+      operationId: getMatchEvidence
+      tags: [Matching]
+      summary: The verified evidence behind a match
+      description: >
+        Verified claims only. What was checked, by whom and when goes to any employer who owns
+        the role, so a buyer can judge the reasoning before subscribing.
+
+        `sourceAvailable` says whether an independent third party holds a public record of the
+        check. `sourceUrl` carries its address and is released only to an organization whose
+        subscription currently grants marketplace access; it is null when no third party exists
+        (never a Zoryvex link presented as an independent one) and null without that access. For
+        a repository, the detail text is additionally redacted of the owner/repo identity, since
+        that string is the address with the host removed.
+      responses:
+        '200':
+          description: The verified evidence summaries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VerifiedEvidenceSummary' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches/{candidateId}/explain:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/CandidateId'
+    post:
+      operationId: explainMatch
+      tags: [Matching]
+      summary: An AI summary of why this candidate matches
+      description: >
+        Gated behind the `aiMatching` flag, which is off until the evaluation in docs/AI_SAFETY.md
+        passes. With the flag off this returns a normal `available: false` response rather than an
+        error, and the match's deterministic rationale is unaffected either way. AI never makes a
+        hiring decision, never sees contact details, and every claim it makes cites an evidence id.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: An explanation, or a plain statement that one is not available.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [available, explanation, citedEvidenceIds]
+                    properties:
+                      available: { type: boolean, const: true }
+                      explanation: { type: string }
+                      citedEvidenceIds:
+                        type: array
+                        items: { type: string }
+                  - type: object
+                    required: [available, reason]
+                    properties:
+                      available: { type: boolean, const: false }
+                      reason:
+                        type: string
+                        enum: [ai_matching_disabled, ai_unavailable, no_supporting_evidence]
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/EmployerOnly' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches/{candidateId}/interest:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/CandidateId'
+    post:
+      operationId: setEmployerInterest
+      tags: [Matching]
+      summary: Record whether this employer wants to talk to this candidate
+      description: >
+        The employer's half of a mutual match. Writes only the employer's own answer: a request
+        cannot carry the candidate's. Ownership is checked against the role rather than the match,
+        because the role id comes from the URL and trusting the match alone would let any employer
+        write onto a competitor's shortlist by guessing ids. Saying the same thing twice is a
+        no-op, and an employer may change their mind.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interest]
+              properties:
+                interest: { $ref: '#/components/schemas/InterestState' }
+      responses:
+        '200':
+          description: The match, with the employer's answer recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '404':
+          description: >
+            No such role for this employer, or no such match. Deliberately the same answer for
+            both, so the response cannot be used to discover whether a role or candidate exists.
+
+  /candidates/me/matches:
+    get:
+      operationId: listCandidateMatches
+      tags: [Matching]
+      summary: The roles this candidate has been matched to
+      description: >
+        The candidate's side of matching, which did not exist: matching wrote rows keyed by
+        candidate that no candidate could read, so half of a mutual match was structurally
+        impossible. Deliberately narrow — the role, how well it fits, what it pays, and whether
+        the employer has said yes. Never who else was matched, and never anything about the
+        employer beyond the role itself. The candidate id comes from the session and appears
+        nowhere in the path, so there is no id to substitute.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Every live match for this candidate, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matches]
+                properties:
+                  matches:
+                    type: array
+                    items: { $ref: '#/components/schemas/CandidateMatchView' }
+
+  /candidates/me/matches/{roleId}/interest:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    post:
+      operationId: setCandidateInterest
+      tags: [Matching]
+      summary: Record whether this candidate wants to talk to this employer
+      description: >
+        The candidate's half. Only the role id is in the path; the candidate id comes from the
+        session, so this can only ever write to the caller's own match. A role the caller was
+        never matched to is not found rather than silently created, which is what stops this
+        becoming an open application inbox the product does not have.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interest]
+              properties:
+                interest: { $ref: '#/components/schemas/InterestState' }
+      responses:
+        '200':
+          description: The match, with the candidate's answer recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '404':
+          description: This candidate has no match for that role.
+
+  /roles/{roleId}/matches/{candidateId}/unlock-contact:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/CandidateId'
+    post:
+      operationId: unlockContact
+      tags: [Matching]
+      summary: Spend one contact unlock on a match
+      description: >
+        A server-side entitlement transaction, never client-asserted. It requires, in order: this
+        employer owns the role, a real match exists, the candidate has explicitly consented to
+        contact sharing, and the plan has allowance left. The increment is atomic, so two
+        concurrent unlocks cannot both get past the allowance.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: The match, and whether it was already unlocked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [match, alreadyUnlocked]
+                properties:
+                  match: { $ref: '#/components/schemas/Match' }
+                  alreadyUnlocked: { type: boolean }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: >
+            Not an employer, the candidate has not consented to contact sharing, the plan has no
+            allowance left, or the `contactUnlocks` flag is off.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Concurrent unlocks raced and this one lost.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /roles/{roleId}/matches/{candidateId}/contact:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+      - $ref: '#/components/parameters/CandidateId'
+    get:
+      operationId: getUnlockedContact
+      tags: [Matching]
+      summary: The contact details for an already-unlocked match
+      description: >
+        Strictly gated on a prior successful unlock, and never a substitute for one. This is the
+        only route in the API that returns a candidate's email to an employer.
+      responses:
+        '200':
+          description: The candidate's contact details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email, displayName]
+                properties:
+                  email: { type: string, format: email }
+                  displayName: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not an employer, contact has not been unlocked for this match, or the `contactUnlocks` flag is off.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/exceptions:
+    get:
+      operationId: getExceptionQueue
+      tags: [Admin]
+      summary: Unresolved audit and flagged items
+      description: >
+        Founder-admin only, and additionally requires a *recent* WebAuthn step-up rather than
+        merely a stepped-up session. Deliberately a queue of things needing attention, not a
+        dashboard.
+      responses:
+        '200':
+          description: The exception queue.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/FounderAdminOnly' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /webhooks/paystack:
+    post:
+      operationId: receivePaystackWebhook
+      tags: [Webhooks]
+      summary: Receive a signed Paystack event
+      description: >
+        Signature-verified, then deduplicated by event id with a conditional write, then verified
+        again by an independent server-to-server call to Paystack before any entitlement is
+        granted. The webhook body decides only whether to check, never whether to grant.
+
+
+        Always answers 200 once the event has been recorded. A non-2xx would make Paystack retry an
+        event that has already been handled.
+      security: []
+      parameters:
+        - name: x-paystack-signature
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        description: The raw Paystack event body, verified byte-for-byte against the signature.
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Received.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received: { type: boolean, const: true }
+        '401':
+          description: The signature did not verify.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /billing:
+    get:
+      operationId: getBilling
+      tags: [Billing]
+      summary: The organisation's subscription, access state, payment history and live quotes
+      description: >
+        Everything the billing page renders, assembled server-side.
+
+
+        The quotes are computed here rather than from a price table in the browser: whether this
+        organisation gets the founding price depends on a global count of founding places that
+        only the server can read, and a page that decided it locally would eventually show one
+        price and charge another.
+
+
+        `access` is derived on every read rather than stored, so a grace window that closed
+        twenty minutes ago is closed the next time anybody looks, with nothing having had to wake
+        up and notice.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The billing overview, payment history, and a quote per plan.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overview, history, quotes]
+                properties:
+                  overview: { $ref: '#/components/schemas/BillingOverview' }
+                  history:
+                    type: array
+                    items: { $ref: '#/components/schemas/PaymentHistoryEntry' }
+                  quotes:
+                    type: array
+                    items: { $ref: '#/components/schemas/SubscriptionQuote' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not an employer admin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /billing/subscription:
+    post:
+      operationId: createSubscriptionCheckout
+      tags: [Billing]
+      summary: Start a subscription checkout
+      description: >
+        Creates a payment attempt, initialises a Paystack transaction carrying the plan code, and
+        returns the URL to redirect the employer to. Test mode or live mode is decided entirely by
+        which secret key is configured; there is no code branch on environment anywhere here.
+
+
+        The attempt row is written before Paystack is contacted, and it is written whether or not
+        the buyer ever finishes. Paystack sends no webhook for an abandoned checkout, so without
+        that row there would be nothing to reconcile against.
+
+
+        Requires an `Idempotency-Key`. Without one, a double click or a client retry after a
+        dropped connection each start a separate checkout, and a buyer who completes two of them
+        is charged twice with two subscriptions running.
+
+
+        The response says nothing about entitlement. Access follows from a verified webhook or
+        from reconciliation, never from this call and never from what the browser reports on its
+        way back.
+
+
+        Payments are securely processed by Paystack under our business name, Abba's Solutions.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [scout, team, partner] }
+                interval:
+                  type: string
+                  enum: [monthly, annually]
+                  default: monthly
+                  description: >
+                    Only `monthly` is currently offered. `annually` is modelled end to end but has
+                    no founder-approved price, and asking for it is refused with 403.
+      responses:
+        '200':
+          description: Where to send the employer next.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl, reference, amountNGN, created]
+                properties:
+                  authorizationUrl: { type: string, format: uri }
+                  reference: { type: string }
+                  amountNGN: { type: integer, minimum: 1 }
+                  created:
+                    type: boolean
+                    description: False when an idempotent retry returned the existing attempt.
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: >
+            Not an employer admin, or the `payments` flag is off, or the interval is not offered,
+            or no Paystack Plan has been created for that tier yet. Every one of these refusals
+            says plainly that nothing has been charged.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: This organisation already has a subscription.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /billing/cancel:
+    post:
+      operationId: cancelSubscription
+      tags: [Billing]
+      summary: Cancel the organisation's subscription
+      description: >
+        Paystack is called first and the local record is updated only once it confirms, so the two
+        systems can never disagree in the direction that matters: an employer told they have
+        cancelled while the charges carry on.
+
+
+        Paystack's disable is not an immediate termination. It sends `subscription.not_renew` now
+        and `subscription.disable` on the next payment date, so the period already paid for is
+        still served — which is why the response returns the date access actually runs to.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: The subscription's new state and when access ends.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, accessEndsAt, cancelRequestedAt]
+                properties:
+                  status: { $ref: '#/components/schemas/SubscriptionStatus' }
+                  accessEndsAt: { type: [string, 'null'], format: date-time }
+                  cancelRequestedAt: { type: [string, 'null'], format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not an employer admin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: There is no subscription to cancel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /billing/card-update-link:
+    post:
+      operationId: createCardUpdateLink
+      tags: [Billing]
+      summary: A Paystack-hosted link for replacing the card on a subscription
+      description: >
+        This is the entire card-update story, deliberately. No card number, expiry or security code
+        is ever collected by, posted to, or logged in this product: the page is Paystack's, on
+        Paystack's domain, and Paystack tokenises the new card with a small charge it refunds
+        immediately.
+
+
+        The link is short-lived, so one is generated per request rather than stored.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: A short-lived Paystack-hosted management link.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [link]
+                properties:
+                  link: { type: string, format: uri }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not an employer admin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: There is no subscription to update.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/billing:
+    get:
+      operationId: getBillingDiagnostic
+      tags: [Admin]
+      summary: One organisation's complete billing timeline
+      description: >
+        The founder's answer to "why is this organisation's billing in the state it is in". Keeps
+        what the employer-facing views drop — raw Paystack statuses, gateway responses, transaction
+        ids, the reconciliation count — and states in plain sentences what is wrong.
+
+
+        `founder_admin` and a recent WebAuthn step-up, the same gate as the exception queue: this
+        reads another organisation's payment history.
+
+
+        The subscription's `email_token` is never returned. It is the credential that can cancel
+        somebody's subscription, and a diagnostic page is not a reason to put it on a screen. Its
+        presence is reported as `hasCancellationToken`; its value is not.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: employerId
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The billing diagnostic.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BillingDiagnostic' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Not a founder admin, or the WebAuthn step-up window has expired.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-zoryvex_session
+      description: >
+        Opaque, hashed at rest, HttpOnly, Secure, `__Host-` prefixed. Issued by
+        `/auth/consume-code`, checked server-side on every request by the API Gateway Lambda
+        authorizer. The client never sends a role or an organisation id.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-Zoryvex-Csrf
+      description: >
+        Required on every mutating request (anything other than GET or HEAD), alongside an exact
+        `Origin` match. The value is session-bound and re-issued by `/auth/session`.
+
+  parameters:
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { type: string }
+    CandidateId:
+      name: candidateId
+      in: path
+      required: true
+      schema: { type: string }
+    EvidenceId:
+      name: evidenceId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    ValidationError:
+      description: The request body, path or headers did not validate.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: No valid session, or a missing/mismatched CSRF token on a mutating request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: >
+        Not found, or not yours. The two are deliberately indistinguishable so this cannot confirm
+        that another tenant's record exists.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    CandidateOnly:
+      description: This route serves candidates only.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    EmployerOnly:
+      description: This route serves employers only.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    FounderAdminOnly:
+      description: This route serves the founder-admin only, after a recent WebAuthn step-up.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    VersionConflict:
+      description: The `version` sent is stale — somebody else changed this record first.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit reached.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PaymentProviderError:
+      description: Paystack was unreachable or rejected the request. Never the caller's fault.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: Unexpected error. The message is always generic; detail is logged, never returned.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - TOO_MANY_REQUESTS
+            - PAYMENT_PROVIDER_ERROR
+            - INTERNAL_ERROR
+        message: { type: string }
+
+    HealthStatus:
+      type: object
+      required: [status, timestamp, version, environment]
+      properties:
+        status: { type: string, const: ok }
+        timestamp: { type: string, format: date-time }
+        version: { type: string, minLength: 1 }
+        environment: { type: string, minLength: 1 }
+
+    AccountRole:
+      type: string
+      enum: [candidate, employer_member, employer_admin, founder_admin]
+
+    SessionContext:
+      type: object
+      required: [accountId, email, role]
+      properties:
+        accountId: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/AccountRole' }
+        candidateId: { type: string }
+        employerId: { type: string }
+        stepUpVerifiedAt:
+          type: string
+          format: date-time
+          description: Present only on a founder-admin session that has completed a WebAuthn step-up.
+
+    LaunchTrack:
+      type: string
+      enum: [aws_cloud, devops_platform, cloud_security, mlops]
+
+    Seniority:
+      type: string
+      enum: [junior, mid, senior, lead]
+
+    RoleStatus:
+      type: string
+      enum: [draft, active, archived]
+
+    EvidenceSource:
+      type: string
+      enum: [github, project, writeup, certification, other]
+
+    EvidenceVisibility:
+      type: string
+      enum: [private, discovery, employer_shared]
+
+    EvidenceVerificationState:
+      type: string
+      enum: [unverified, self_attested, verified]
+
+    VerificationMethod:
+      type: string
+      enum: [issuer_badge, repo_ownership, graded_task]
+
+    MatchStatus:
+      type: string
+      enum: [suggested, reviewed, contacted, rejected]
+
+    MatchFit:
+      type: string
+      enum: [meets, partial, adjacent]
+
+    KitOrderStatus:
+      type: string
+      enum: [pending, succeeded, failed, refunded]
+
+    CandidateLocation:
+      type: object
+      description: >
+        Where a candidate works from, stated by them on their own profile and never inferred from
+        an IP address, a phone prefix, or a name. An inferred location would turn an employer's
+        payroll filter into a proxy for nationality. City is deliberately absent: these are remote
+        roles, and a city would collect more personal data than any decision here needs.
+      required: [country, utcOffsetMinutes]
+      properties:
+        country: { type: string, pattern: '^[A-Z]{2}$', description: 'ISO 3166-1 alpha-2.' }
+        utcOffsetMinutes: { type: integer, minimum: -720, maximum: 840 }
+
+    RoleLocationRequirement:
+      type: object
+      description: >
+        What a role requires of a candidate's location. Both dimensions are opt-in: an empty
+        country list means anywhere and a null timezone limit means any offset, so a role with
+        neither set filters nobody. Candidates who have not stated a location are never excluded.
+      required: [countries, utcOffsetMinutes, maxTimezoneDifferenceHours]
+      properties:
+        countries:
+          type: array
+          maxItems: 20
+          description: >
+            An allow-list of where this role is able to employ someone, never a deny-list of
+            where it will not. Empty means anywhere.
+          items: { type: string, pattern: '^[A-Z]{2}$' }
+        utcOffsetMinutes:
+          type: integer
+          minimum: -720
+          maximum: 840
+          description: The role's own working offset, which the difference below is measured from.
+        maxTimezoneDifferenceHours:
+          type: number
+          minimum: 0
+          maximum: 12
+          nullable: true
+          description: Null means no timezone limit. Zero means the same offset exactly.
+
+    PeerRelationship:
+      type: string
+      description: How the person confirming worked with the candidate.
+      enum: [managed_them, worked_alongside, was_their_client, reviewed_their_work]
+
+    EvidenceStrength:
+      type: object
+      description: >
+        What a piece of evidence establishes, as levels with a stated basis rather than a score. A
+        number would invite a comparison whose construction the reader cannot see. Every level is
+        derived from a fact recorded on the evidence and is re-derived against the clock on each
+        read, so a lapsed proof collapses to "claimed" rather than advertising a strength it lost.
+      required: [attained, basis, unsupported]
+      properties:
+        attained:
+          type: array
+          description: Every level this evidence reaches, ordered by how hard each is to fake.
+          items: { $ref: '#/components/schemas/EvidenceStrengthLevel' }
+        basis:
+          type: object
+          additionalProperties: { type: string }
+          description: >
+            Why each attained level was reached, in words an employer can read. Only attained levels
+            appear: inventing a reason for a level the evidence never reached would be the overclaim
+            this whole model exists to prevent.
+        unsupported:
+          type: array
+          description: >
+            Levels this platform cannot establish for anybody yet, stated on every response. An
+            employer who cannot tell "this candidate did not do that" from "Zoryvex does not do that
+            yet" is being misled by omission.
+          items: { $ref: '#/components/schemas/EvidenceStrengthLevel' }
+
+    EvidenceStrengthLevel:
+      type: string
+      enum:
+        - claimed
+        - knowledge_assessed
+        - skill_demonstrated
+        - process_observed
+        - outcome_verified
+        - work_corroborated
+        - peer_verified
+        - continuously_verified
+
+    PublicProofEntry:
+      type: object
+      description: One claim that passed a machine-re-runnable check, with the dates that make it honest.
+      required:
+        [claim, verificationMethod, verificationDetail, verifiedAt, strength, peerAttestations]
+      properties:
+        claim: { type: string, minLength: 1 }
+        verificationMethod: { $ref: '#/components/schemas/VerificationMethod' }
+        verificationDetail:
+          type: string
+          description: What was actually checked, in words an employer can read.
+        verifiedAt: { type: string, format: date-time }
+        verificationExpiresAt:
+          type: string
+          format: date-time
+          description: Absent means the credential behind it does not lapse.
+        strength: { $ref: '#/components/schemas/EvidenceStrength' }
+        peerAttestations:
+          type: array
+          description: >
+            Confirmations from people who worked with them, in their own words. Public because the
+            verifier is told so on the confirm page before they write it, rather than afterwards.
+            Carries the organisation's domain and never the person's address.
+          items:
+            type: object
+            required: [verifierDomain, relationship, statement, confirmedAt]
+            properties:
+              verifierDomain: { type: string }
+              relationship: { $ref: '#/components/schemas/PeerRelationship' }
+              statement: { type: string }
+              confirmedAt: { type: string, format: date-time }
+
+    PublicProof:
+      type: object
+      description: >
+        What a stranger sees at a candidate's public proof URL, and the only shape in this API that
+        leaves the authenticated boundary. Defined by what it omits as much as by what it carries:
+        no email address, no internal candidate id, no contact details, no unverified or
+        self-attested claims, nothing whose visibility is private, and none of the candidate's own
+        narrative of context and actions. A public page is proof, not a CV.
+      required: [displayName, launchTrack, proofs, generatedAt]
+      properties:
+        displayName: { type: string, minLength: 1 }
+        launchTrack: { $ref: '#/components/schemas/LaunchTrack' }
+        proofs:
+          type: array
+          items: { $ref: '#/components/schemas/PublicProofEntry' }
+        generatedAt:
+          type: string
+          format: date-time
+          description: >
+            When this page was built, not when anything was verified. A proof page that cannot date
+            itself is asking to be trusted.
+
+    Candidate:
+      type: object
+      required:
+        [
+          id,
+          email,
+          displayName,
+          launchTrack,
+          discoveryOptIn,
+          onboardingComplete,
+          summary,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string, minLength: 1 }
+        launchTrack: { $ref: '#/components/schemas/LaunchTrack' }
+        discoveryOptIn: { type: boolean }
+        contactUnlockConsent: { type: boolean }
+        phone:
+          type: string
+          description: >
+            An optional phone number the candidate chose to give. Released only through the
+            unlocked-contact route, only after an employer has unlocked the match and only while
+            contact consent stands, exactly as the email address is. Never used in matching or
+            ranking, and never present on a public proof page. Absent when not given.
+        linkedinUrl:
+          type: string
+          description: >
+            An optional LinkedIn profile address, constrained to a linkedin.com profile path so the
+            field cannot become an arbitrary link. Released under the same conditions as phone.
+            Absent when not given.
+        websiteUrl:
+          type: string
+          description: >
+            One more address the candidate chose to give, for the people whose work does not live
+            on LinkedIn: a GitHub profile, a personal site, anywhere else. Unlike linkedinUrl this
+            is not pinned to a host, so what is enforced is only what makes a link dangerous rather
+            than unfamiliar: https, no embedded credentials, a real host, bounded length. Released
+            under the same conditions as phone, and shown to an employer as a link the candidate
+            gave rather than as anything Zoryvex checked. Absent when not given.
+        location: { $ref: '#/components/schemas/CandidateLocation' }
+        publicProofId:
+          type: string
+          description: >
+            The opaque id in this candidate's public proof URL, present only while they consent to
+            having one. Minted on opt-in and destroyed on opt-out, so revoking breaks every link
+            that was ever shared rather than hiding the page behind a flag.
+        intent: { : '#/components/schemas/CandidateIntent' }
+        onboardingComplete: { type: boolean }
+        summary: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Employer:
+      type: object
+      required: [id, organizationName, contactEmail, createdAt]
+      properties:
+        id: { type: string }
+        organizationName: { type: string, minLength: 1 }
+        contactEmail: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+
+    Entitlement:
+      type: object
+      required:
+        [employerId, plan, status, kitPurchasedAt, subscriptionRenewsAt, priceNGN, foundingMember]
+      properties:
+        employerId: { type: string }
+        plan: { type: string, enum: [none, kit, scout, team, partner] }
+        status: { type: string, enum: [none, active, past_due, canceled] }
+        kitPurchasedAt: { type: [string, 'null'], format: date-time }
+        subscriptionRenewsAt: { type: [string, 'null'], format: date-time }
+        # The monthly price this subscription is billed at, stamped when it
+        # starts and never recomputed, so a founding member's price survives
+        # a later change to the standard price. Null for an employer who has
+        # never subscribed. Required in a response because the schema fills it
+        # in on read: a record written before the field existed parses to
+        # null rather than failing, so every Entitlement the API returns has
+        # it.
+        priceNGN: { type: [integer, 'null'], minimum: 1 }
+        foundingMember: { type: boolean, default: false }
+
+    Evidence:
+      type: object
+      required:
+        [
+          id,
+          candidateId,
+          source,
+          claim,
+          context,
+          actions,
+          outcome,
+          verificationState,
+          visibility,
+          consentGiven,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        candidateId: { type: string }
+        source: { $ref: '#/components/schemas/EvidenceSource' }
+        claim: { type: string, minLength: 1 }
+        context: { type: string, minLength: 1 }
+        actions: { type: string, minLength: 1 }
+        outcome: { type: string, minLength: 1 }
+        verificationState: { $ref: '#/components/schemas/EvidenceVerificationState' }
+        verificationMethod: { $ref: '#/components/schemas/VerificationMethod' }
+        verifiedAt: { type: string, format: date-time }
+        verificationRef: { type: string }
+        verificationDetail: { type: string }
+        verificationExpiresAt: { type: string, format: date-time }
+        visibility: { $ref: '#/components/schemas/EvidenceVisibility' }
+        consentGiven: { type: boolean }
+        sourceUrl: { type: string, format: uri }
+        fileId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CompensationPeriod:
+      type: string
+      enum: [month, year, day]
+      description: >
+        Both monthly and daily are kept because Nigerian salaries are usually
+        discussed per month while contract and training work is quoted per day.
+        Converting one into the other needs an assumption about working days
+        that neither side has made.
+
+    CompensationRange:
+      type: object
+      required: [minNGN, maxNGN, period]
+      description: >
+        Whole naira, both ends required. A single figure is either a ceiling
+        pretending to be an offer or a floor pretending to be a ceiling, and
+        "competitive" is neither. Both ends are what makes "transparent" mean
+        something a candidate can act on before spending their time.
+      properties:
+        minNGN: { type: integer, minimum: 1 }
+        maxNGN: { type: integer, minimum: 1 }
+        period: { $ref: '#/components/schemas/CompensationPeriod' }
+
+    EngagementKind:
+      type: string
+      enum: [employment, contract, mentoring, tutoring, training]
+      description: >
+        Mentoring, tutoring and training are first-class rather than lumped
+        into "other": they are arrangements this market runs on, and a
+        verified practitioner is exactly who is worth learning from.
+
+    CandidateIntent:
+      type: object
+      description: >
+        What this person is open to and what they need to be paid. Absent
+        means unstated, which matching reads as no constraint rather than as
+        a refusal.
+      properties:
+        openTo:
+          type: array
+          items: { $ref: '#/components/schemas/EngagementKind' }
+        minimumCompensation: { $ref: '#/components/schemas/CompensationRange' }
+        note: { type: string, maxLength: 500 }
+
+    RoleIntent:
+      type: object
+      description: >
+        What this role is offering. Singular where the candidate's is plural,
+        because a role is one arrangement while a person can be open to several.
+      properties:
+        engagementKind: { $ref: '#/components/schemas/EngagementKind' }
+        compensation: { $ref: '#/components/schemas/CompensationRange' }
+
+    CandidateMatchView:
+      type: object
+      required:
+        [roleId, roleTitle, employerId, matchScore, candidateInterest, employerInterest, mutual]
+      description: >
+        What a candidate is shown about one of their own matches. Narrower than Match on purpose:
+        no other candidate, no shortlist internals, no contact state. The employer's interest is
+        included deliberately — knowing somebody has already said yes is the reason a candidate
+        would bother answering.
+      properties:
+        roleId: { type: string }
+        roleTitle: { type: string }
+        employerId: { type: string }
+        matchScore: { type: number, minimum: 0, maximum: 1 }
+        fit: { $ref: '#/components/schemas/MatchFit' }
+        fitReason: { type: string }
+        compensation: { $ref: '#/components/schemas/RoleIntent' }
+        candidateInterest: { $ref: '#/components/schemas/InterestState' }
+        employerInterest: { $ref: '#/components/schemas/InterestState' }
+        mutual:
+          type: boolean
+          description: True only when both sides have actively said yes. Silence is not agreement.
+
+    InterestState:
+      type: string
+      enum: [unstated, interested, declined]
+      description: >
+        unstated is not declined. Somebody who has not looked yet must not
+        read as a rejection; telling those apart is the point of recording
+        interest at all.
+
+    Role:
+      type: object
+      required:
+        [
+          id,
+          employerId,
+          launchTrack,
+          title,
+          seniority,
+          outcomes,
+          mustHaveWork,
+          constraints,
+          status,
+          createdAt,
+        ]
+      properties:
+        id: { type: string }
+        employerId: { type: string }
+        launchTrack: { $ref: '#/components/schemas/LaunchTrack' }
+        title: { type: string, minLength: 1 }
+        seniority: { $ref: '#/components/schemas/Seniority' }
+        outcomes: { type: string, minLength: 1 }
+        mustHaveWork:
+          type: array
+          minItems: 1
+          items: { type: string }
+        constraints: { type: string }
+        locationRequirement: { $ref: '#/components/schemas/RoleLocationRequirement' }
+        intent: { $ref: '#/components/schemas/RoleIntent' }
+        status: { $ref: '#/components/schemas/RoleStatus' }
+        createdAt: { type: string, format: date-time }
+
+    Match:
+      type: object
+      required: [id, roleId, candidateId, matchScore, status, contactUnlocked, createdAt]
+      properties:
+        id: { type: string }
+        roleId: { type: string }
+        candidateId: { type: string }
+        matchScore: { type: number, minimum: 0, maximum: 1 }
+        status: { $ref: '#/components/schemas/MatchStatus' }
+        candidateInterest: { $ref: '#/components/schemas/InterestState' }
+        employerInterest: { $ref: '#/components/schemas/InterestState' }
+        contactUnlocked: { type: boolean }
+        fit:
+          allOf:
+            - $ref: '#/components/schemas/MatchFit'
+          description: >
+            How closely this candidate answers the role as written, kept separate from how much of
+            it is proved. `meets` answers it inside the role's location and track; `partial` backs
+            at least one requirement but sits outside one of those; `adjacent` carries verified
+            proof that backs no stated requirement. Absent on matches written before tiering
+            existed, which are read as `meets`.
+        fitReason:
+          type: string
+          description: >
+            Why this candidate is not an exact answer, and what they have instead, in a sentence an
+            employer reads. Absent on a `meets` match, which needs no explaining. A pay shortfall
+            says the role pays below what the candidate needs and never names their figure, which
+            the profile field promises is not shown to an employer as a demand.
+        fitReasonForCandidate:
+          type: string
+          description: >
+            The same explanation addressed to the candidate, and the only place their stated
+            minimum is named. Stored on the match and returned by the candidate's own roles
+            endpoint as `CandidateMatchView.fitReason`; stripped from this schema before the
+            shortlist is sent, so an employer never receives it in any response. Documented here
+            because it is part of the stored record, not because it is ever served to an employer.
+        candidateOpenTo:
+          type: array
+          items: { $ref: '#/components/schemas/EngagementKind' }
+          description: >
+            The kinds of work this candidate said they are open to. Written at recompute from the
+            same `intent.openTo` the fit reason above is built from, so the two can never
+            disagree. An empty array means they stated no preference, which is why nothing was
+            ruled out on it; an absent field means the shortlist predates this and nobody asked.
+            Shown to the employer so an unlock is not spent reaching somebody who wants a
+            different arrangement.
+        rationale:
+          type: string
+          description: The deterministic explanation. Present whether or not AI is enabled.
+        matchedEvidenceIds:
+          type: array
+          items: { type: string }
+        scoringVersion: { type: string }
+        strongestEvidence:
+          allOf:
+            - $ref: '#/components/schemas/EvidenceStrengthLevel'
+          description: >
+            The strongest thing any evidence behind this match establishes, used to order matches
+            that cover the same proportion of a role's requirements. A second axis rather than a
+            multiplier folded into matchScore: the score keeps meaning exactly one thing, the
+            proportion of must-have requirements backed by verified proof, and strength is read
+            separately. Absent on matches scored before ranking considered strength, which sort
+            last among their equals.
+        aiExplanation:
+          type: string
+          description: Only ever present when the `aiMatching` flag is on and a summary succeeded.
+        createdAt: { type: string, format: date-time }
+
+    KitOrder:
+      type: object
+      required:
+        [id, employerId, roleId, amountNGN, checkoutUrl, status, paystackReference, createdAt]
+      properties:
+        id: { type: string }
+        employerId: { type: string }
+        roleId: { type: string }
+        amountNGN:
+          type: integer
+          minimum: 1
+          description: >
+            What this order charged, not what the Kit costs now. Orders
+            predating a price change keep the amount they were charged.
+        checkoutUrl:
+          type: string
+          nullable: true
+          description: >
+            Where this buyer was sent to pay. Stored because Paystack initializes a reference
+            once and answers "Duplicate Transaction Reference" to the second call, so a retry of
+            the same Idempotency-Key returns this rather than opening a second checkout. Null on
+            orders written before this existed.
+        status: { $ref: '#/components/schemas/KitOrderStatus' }
+        paystackReference: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    AuditEvent:
+      type: object
+      required: [id, actorId, actorRole, action, targetType, targetId, createdAt]
+      properties:
+        id: { type: string }
+        actorId: { type: string }
+        actorRole: { type: string, enum: [candidate, employer, admin] }
+        action: { type: string, minLength: 1 }
+        targetType: { type: string, minLength: 1 }
+        targetId: { type: string }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    VersionedCandidate:
+      type: object
+      required: [candidate, version]
+      properties:
+        candidate: { $ref: '#/components/schemas/Candidate' }
+        version: { type: integer, minimum: 0 }
+
+    VersionedEvidence:
+      type: object
+      required: [evidence, version]
+      properties:
+        evidence: { $ref: '#/components/schemas/Evidence' }
+        version: { type: integer, minimum: 0 }
+
+    VersionedRole:
+      type: object
+      required: [role, version]
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        version: { type: integer, minimum: 0 }
+
+    ProofGapPreview:
+      type: object
+      required: [headline, gaps, note]
+      properties:
+        headline: { type: string }
+        gaps:
+          type: array
+          items: { type: string }
+        note: { type: string }
+
+    VerifiedEvidenceSummary:
+      type: object
+      required:
+        [
+          evidenceId,
+          claim,
+          context,
+          actions,
+          outcome,
+          method,
+          detail,
+          sourceAvailable,
+          sourceUrl,
+          verifiedAt,
+          strength,
+          peerAttestations,
+          attempts,
+          attemptSummary,
+        ]
+      properties:
+        evidenceId: { type: string }
+        claim: { type: string }
+        context: { type: string }
+        actions: { type: string }
+        outcome: { type: string }
+        method: { $ref: '#/components/schemas/VerificationMethod' }
+        detail:
+          type: string
+          description: Human-readable record of the check, e.g. the certification name and issuer.
+        sourceAvailable:
+          type: boolean
+          description: >
+            Whether an independent third party holds a public record of this check. A fact about
+            the evidence, not about the plan, so it is the same for every caller.
+        sourceUrl:
+          type: [string, 'null']
+          description: >
+            Where to re-run the check at the source. Null when there is no third party to check
+            with, and null when the organization has no marketplace access.
+        verifiedAt: { type: string, format: date-time }
+        strength:
+          $ref: '#/components/schemas/EvidenceStrength'
+          description: >
+            What this evidence establishes, and what Zoryvex cannot establish at all. On the screen
+            somebody pays to read, because an employer who sees two items both marked "verified" is
+            left to guess which was corroborated against a source the candidate does not control.
+        peerAttestations:
+          type: array
+          description: >
+            Confirmations recorded against this claim, in the words given. Carries the verifier's
+            organisation domain and never their address.
+          items:
+            type: object
+            required: [verifierDomain, relationship, statement, confirmedAt]
+            properties:
+              verifierDomain: { type: string }
+              relationship: { $ref: '#/components/schemas/PeerRelationship' }
+              statement: { type: string }
+              confirmedAt: { type: string, format: date-time }
+        attempts:
+          oneOf:
+            - $ref: '#/components/schemas/AttemptHistory'
+            - type: 'null'
+          description: >
+            For a graded task, what happened across the candidate's submissions. Null for every
+            other method rather than an empty history: a certification has no rubric and no
+            attempts, and "no graded attempt recorded" against one would read as something missing
+            rather than something that never applied.
+        attemptSummary:
+          type: [string, 'null']
+          description: The same history in one line, for a reader who will not open the list.
+
+    AttemptHistory:
+      type: object
+      description: >
+        The sequence of graded submissions behind one claim. Deliberately NOT process observation:
+        it is where somebody was each time they stopped and asked, not how they got there. Not a
+        score and not ranked on — three attempts is not worse than one, and an employer who wants to
+        weigh it does so on facts rather than on a number Zoryvex made up. Bounded at five, because
+        verification refuses a sixth attempt per evidence item.
+      required: [attempts, passedFirstTime, everDisqualified]
+      properties:
+        attempts:
+          type: array
+          items: { $ref: '#/components/schemas/GradedAttempt' }
+        passedFirstTime:
+          type: boolean
+          description: >
+            The first submission passed with nothing outstanding. Deliberately not "passed
+            eventually": the distinction is the entire point of keeping this.
+        everDisqualified:
+          type: boolean
+          description: >
+            Any attempt tripped a disqualifying check, even if a later one passed. Surfaced because
+            "wrote a credential into the config, then removed it" is something an employer may
+            reasonably want to know, and hiding it behind an eventual pass would choose for them.
+
+    GradedAttempt:
+      type: object
+      description: >
+        One submission, and what it was marked against. The submission itself is never carried and
+        never stored: it is the candidate's work, it can contain anything they pasted into it, and
+        which checks failed is the whole signal without the payload.
+      required: [evidenceId, taskId, attemptNumber, passed, failedCheckIds, disqualified, at]
+      properties:
+        evidenceId: { type: string }
+        taskId: { type: string }
+        attemptNumber:
+          type: integer
+          minimum: 1
+          description: >
+            Derived from the order attempts happened in rather than stored, so two submissions
+            landing together cannot both claim the same number.
+        passed: { type: boolean }
+        failedCheckIds:
+          type: array
+          description: Rubric check ids that did not pass, in the rubric's own order.
+          items: { type: string }
+        disqualified:
+          type: boolean
+          description: >
+            A disqualifying check fired: writing a credential into configuration, or submitting work
+            set for somebody else. Separate from the score because it is categorical rather than a
+            low mark, and a reader should not have to know which rubric ids carry that weight.
+        at: { type: string, format: date-time }
+
+    OfferedTask:
+      type: object
+      required: [task, requirements, outOf]
+      properties:
+        task:
+          type: object
+          required: [id, title, brief, timeboxMinutes, passMark]
+          properties:
+            id: { type: string }
+            title: { type: string }
+            brief:
+              type: array
+              items: { type: string }
+            timeboxMinutes: { type: integer }
+            passMark: { type: integer }
+        requirements:
+          type: array
+          items: { type: string }
+        outOf: { type: integer }
+
+    CandidateExport:
+      type: object
+      required: [candidate, evidence, files, contactUnlocks, gradedAttempts, exportedAt]
+      properties:
+        candidate: { $ref: '#/components/schemas/Candidate' }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/Evidence' }
+        files:
+          type: array
+          items:
+            type: object
+            required: [id, originalFilename, mimeType, scanStatus, createdAt]
+            properties:
+              id: { type: string }
+              originalFilename: { type: string }
+              mimeType: { type: string }
+              scanStatus: { type: string }
+              createdAt: { type: string, format: date-time }
+        contactUnlocks:
+          description: >
+            Roles an employer paid to see this candidate's contact details for. The role title is
+            included because the unlock notification email already names it; the employer is not
+            named, matching that email. No timestamp: a Match carries no unlock time, and dating it
+            from the match would report the wrong moment.
+          type: array
+          items:
+            type: object
+            required: [roleId, roleTitle]
+            properties:
+              roleId: { type: string }
+              roleTitle: { type: string }
+        gradedAttempts:
+          description: >
+            Every graded-task attempt behind this candidate's evidence, in the same shape employers
+            are shown. Included so a person can read what is said about them to the people deciding
+            whether to hire them.
+          type: array
+          items:
+            type: object
+            required: [evidenceId, history]
+            properties:
+              evidenceId: { type: string }
+              history: { $ref: '#/components/schemas/AttemptHistory' }
+        exportedAt: { type: string, format: date-time }
+
+    SubscriptionStatus:
+      type: string
+      enum: [active, non-renewing, attention, completed, cancelled]
+      description: >
+        Paystack's own five subscription statuses, spelled exactly as Paystack spells them.
+        `non-renewing` keeps its hyphen on purpose: renaming it would mean a translation layer in
+        every direction, and a translation layer is where a status silently becomes a different
+        status.
+
+    AccessState:
+      type: string
+      enum: [none, active, grace, suspended]
+      description: >
+        What the organisation may actually do right now, which is a different question from what
+        Paystack intends to do next month. A subscription at `attention` still grants access for
+        the length of the grace window; one at `non-renewing` grants access until the period it
+        already paid for runs out.
+
+    PaymentStatus:
+      type: string
+      enum:
+        - initialized
+        - pending
+        - ongoing
+        - processing
+        - queued
+        - success
+        - failed
+        - abandoned
+        - reversed
+      description: >
+        Paystack's transaction statuses, plus `initialized` — ours alone, for the moment a
+        checkout URL exists and nobody has been to it yet.
+
+    CardSummary:
+      type: object
+      required: [last4, brand, expMonth, expYear, channel]
+      description: >
+        What can safely be shown back to the customer. No PAN, no security code, and no
+        `authorization_code`: the authorization code is the credential that can charge the card
+        again, so it stays at Paystack. `bin` is omitted for the same reason `last4` is kept —
+        four digits identify the card to its owner, six identify the issuing range to anyone.
+      properties:
+        last4: { type: string, minLength: 4, maxLength: 4 }
+        brand: { type: string }
+        expMonth: { type: string }
+        expYear: { type: string }
+        channel: { type: string }
+
+    BillingOverview:
+      type: object
+      required:
+        - plan
+        - interval
+        - priceNGN
+        - foundingMember
+        - subscriptionStatus
+        - access
+        - nextPaymentDate
+        - currentPeriodEnd
+        - graceEndsAt
+        - lastFailureReason
+        - card
+        - cancelRequestedAt
+        - contactUnlockAllowance
+        - contactUnlocksUsedThisPeriod
+      properties:
+        plan: { type: [string, 'null'], enum: [scout, team, partner, null] }
+        interval: { type: [string, 'null'], enum: [monthly, annually, null] }
+        priceNGN:
+          type: [integer, 'null']
+          minimum: 1
+          description: The price this subscription is billed at, stamped once and never recomputed.
+        foundingMember: { type: boolean }
+        subscriptionStatus:
+          oneOf:
+            - $ref: '#/components/schemas/SubscriptionStatus'
+            - type: 'null'
+        access: { $ref: '#/components/schemas/AccessState' }
+        nextPaymentDate: { type: [string, 'null'], format: date-time }
+        currentPeriodEnd: { type: [string, 'null'], format: date-time }
+        graceEndsAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the current payment failure's grace window closes.
+        lastFailureReason: { type: [string, 'null'] }
+        card:
+          oneOf:
+            - $ref: '#/components/schemas/CardSummary'
+            - type: 'null'
+        cancelRequestedAt: { type: [string, 'null'], format: date-time }
+        contactUnlockAllowance:
+          type: integer
+          minimum: 0
+          description: >
+            Contact unlocks the current plan includes each calendar month. Zero for an
+            organisation with no subscription, which is a real answer rather than a missing one.
+        contactUnlocksUsedThisPeriod:
+          type: integer
+          minimum: 0
+          description: >
+            How many of them this calendar month has spent, read from the period-keyed ledger
+            that the unlock transaction increments. Served by the API because the browser
+            cannot compute it, and showed 0 for every real subscriber while it tried.
+
+    PaymentHistoryEntry:
+      type: object
+      required: [id, purpose, amountNGN, status, createdAt]
+      description: >
+        A payment as the employer is allowed to see it. Gateway responses, Paystack transaction
+        ids and correlation ids are deliberately absent: they are for the founder's diagnostic
+        view, where they are useful, rather than a customer-facing list, where they are noise at
+        best.
+      properties:
+        id: { type: string }
+        purpose: { type: string, enum: [kit, subscription] }
+        amountNGN: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        createdAt: { type: string, format: date-time }
+
+    SubscriptionQuote:
+      type: object
+      required:
+        [plan, interval, priceTier, amountNGN, foundingPlacesLeft, marketplaceCandidates, available]
+      properties:
+        plan: { type: string, enum: [scout, team, partner] }
+        interval: { type: string, enum: [monthly, annually] }
+        priceTier: { type: string, enum: [founding, standard] }
+        amountNGN: { type: integer, minimum: 1 }
+        foundingPlacesLeft: { type: integer, minimum: 0 }
+        marketplaceCandidates:
+          type: integer
+          minimum: 0
+          description: >
+            Discovery-opted candidates the organization's strongest role matches right now. A
+            subscription opens from one match rather than five, so this number can legitimately be
+            small, and it is shown to the buyer before payment for exactly that reason: a thin
+            marketplace is a fair thing to sell to somebody who knows it is thin, and an unfair one
+            to sell to somebody who does not.
+        available:
+          type: boolean
+          description: >
+            False when no Paystack Plan has been created for that tier yet. The plan code itself
+            is never returned: it identifies our integration's objects and a browser has no use
+            for it.
+
+    PaymentAttempt:
+      type: object
+      required:
+        - id
+        - employerId
+        - purpose
+        - reference
+        - checkoutUrl
+        - paystackTransactionId
+        - amountNGN
+        - currency
+        - status
+        - paystackStatus
+        - channel
+        - gatewayResponse
+        - failureReason
+        - planCode
+        - plan
+        - interval
+        - priceTier
+        - roleId
+        - subscriptionCode
+        - customerCode
+        - correlationId
+        - verifiedAt
+        - reconcileAttempts
+        - createdAt
+        - updatedAt
+      description: >
+        One row per attempt to take money, written before Paystack is contacted. This is the
+        record that can describe a checkout that was opened and abandoned, a card that was
+        declined, or the same button pressed twice — none of which Paystack sends a webhook for.
+      properties:
+        id: { type: string }
+        employerId: { type: string }
+        purpose: { type: string, enum: [kit, subscription] }
+        reference: { type: string, minLength: 1 }
+        checkoutUrl:
+          type: [string, 'null']
+          description: >
+            Where this buyer was sent to pay. Paystack initializes a reference once and answers
+            "Duplicate Transaction Reference" to the second call, so a retry of the same
+            Idempotency-Key returns this rather than opening a second checkout for the same
+            money. Null on attempts written before this existed.
+        paystackTransactionId:
+          type: [string, 'null']
+          description: >
+            Paystack asks integrators to treat the transaction id as an unsigned 64-bit integer,
+            which JavaScript cannot hold exactly, so it is carried as a string and never parsed.
+        amountNGN: { type: integer, minimum: 1 }
+        currency: { type: string, const: NGN }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        paystackStatus:
+          type: [string, 'null']
+          description: Exactly what Paystack last called it, even when it could not be mapped.
+        channel: { type: [string, 'null'] }
+        gatewayResponse: { type: [string, 'null'] }
+        failureReason: { type: [string, 'null'] }
+        planCode: { type: [string, 'null'] }
+        plan: { type: [string, 'null'], enum: [scout, team, partner, null] }
+        interval: { type: [string, 'null'], enum: [monthly, annually, null] }
+        priceTier: { type: [string, 'null'], enum: [founding, standard, null] }
+        roleId: { type: [string, 'null'] }
+        subscriptionCode: { type: [string, 'null'] }
+        customerCode: { type: [string, 'null'] }
+        correlationId: { type: string }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        reconcileAttempts: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BillingInvoice:
+      type: object
+      required:
+        - employerId
+        - invoiceCode
+        - subscriptionCode
+        - amountNGN
+        - periodStart
+        - periodEnd
+        - status
+        - paid
+        - paidAt
+        - description
+        - transactionReference
+        - createdAt
+        - updatedAt
+      description: >
+        One billing period of one subscription. Paystack raises an invoice three days before each
+        payment date and updates it afterwards with the outcome, so this is the only record that
+        can answer "was August paid, and if not, why not".
+      properties:
+        employerId: { type: string }
+        invoiceCode: { type: string }
+        subscriptionCode: { type: string }
+        amountNGN: { type: integer, minimum: 1 }
+        periodStart: { type: [string, 'null'], format: date-time }
+        periodEnd: { type: [string, 'null'], format: date-time }
+        status: { type: string }
+        paid: { type: boolean }
+        paidAt: { type: [string, 'null'], format: date-time }
+        description:
+          type: [string, 'null']
+          description: Paystack's own reason on a failure, such as "Insufficient Funds".
+        transactionReference: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BillingDiagnostic:
+      type: object
+      required:
+        - employerId
+        - access
+        - entitlementStatus
+        - expectedEntitlementStatus
+        - inSync
+        - subscription
+        - invoices
+        - payments
+        - timeline
+        - findings
+      properties:
+        employerId: { type: string }
+        access: { $ref: '#/components/schemas/AccessState' }
+        entitlementStatus:
+          { type: [string, 'null'], enum: [none, active, past_due, canceled, null] }
+        expectedEntitlementStatus:
+          type: [string, 'null']
+          enum: [none, active, past_due, canceled, null]
+          description: What the subscription state implies. Different from the stored value means drift.
+        inSync: { type: boolean }
+        subscription:
+          type: ['object', 'null']
+          description: >
+            The stored subscription with `emailToken` removed and replaced by
+            `hasCancellationToken`.
+          additionalProperties: true
+        invoices:
+          type: array
+          items: { $ref: '#/components/schemas/BillingInvoice' }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentAttempt' }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [at, kind, summary, detail]
+            properties:
+              at: { type: string, format: date-time }
+              kind: { type: string, enum: [payment, invoice, subscription] }
+              summary: { type: string }
+              detail: { type: [string, 'null'] }
+        findings:
+          type: array
+          description: Plain sentences naming what is wrong, empty when nothing is.
+          items: { type: string }

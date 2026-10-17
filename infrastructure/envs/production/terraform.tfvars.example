@@ -1,0 +1,17 @@
+site_bucket_name                    = "zoryvex-production-site-<account-id>"
+evidence_bucket_name                = "zoryvex-production-evidence-<account-id>"
+api_deployment_package_path         = "../../../services/api/dist/health.zip"
+authorizer_deployment_package_path = "../../../services/api/dist/authorizer.zip"
+alert_email                         = "<founder-gmail>"
+
+# GuardDuty needs nothing here. The detector is read with a data source
+# (one exists per account per region, created by infrastructure/envs/test),
+# and this environment creates its own malware-protection role rather than
+# borrowing the test one. Both used to be variables pointing at bootstrap
+# outputs that do not exist: bootstrap creates the Terraform state bucket
+# and outputs state_bucket_name alone.
+
+# Left at their defaults (empty/null/false) until Stage B of docs/DNS_RUNBOOK.md:
+# app_origin, www_app_origin, apex_domain, www_domain, domain_aliases,
+# cloudfront_acm_certificate_arn, api_custom_domain_name,
+# api_regional_acm_certificate_arn, enable_hsts

@@ -1,0 +1,95 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >> >> >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources 3 0 R /Contents 6 0 R >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources 3 0 R /Contents 7 0 R >>
+endobj
+6 0 obj
+<< /Length 5607 >>
+stream
+BT /F2 17 Tf 1 0 0 1 56.70 771.99 Tm ([FULL NAME]) Tj ET
+BT /F1 8.5 Tf 1 0 0 1 56.70 756.79 Tm ([CITY, COUNTRY] | [EMAIL] | [PHONE] | linkedin.com/in/[HANDLE] | github.com/[HANDLE]) Tj ET
+BT /F2 11 Tf 1 0 0 1 56.70 733.59 Tm (SUMMARY) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 718.39 Tm (Technical product owner. Specified, architected and shipped Zoryvex, a live proof-first hiring platform on) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 705.19 Tm (AWS serverless: 55 Lambda functions, 51 API routes, single-table DynamoDB, Terraform-managed) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 691.99 Tm (infrastructure, live payments. Built and operated solo. Decisions documented in six architecture decision) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 678.79 Tm (records, including two that removed shipped features because they could not be verified honestly.) Tj ET
+BT /F2 11 Tf 1 0 0 1 56.70 655.59 Tm (EXPERIENCE) Tj ET
+BT /F2 10 Tf 1 0 0 1 56.70 640.39 Tm (Founder and Technical Product Owner, Zoryvex Aug 2026 - Present) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 626.19 Tm (- Specified and shipped a live hiring platform verifying candidate claims against third-party sources: 55) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 612.99 Tm (AWS Lambda functions across 51 API routes, 44 behind a fail-closed authorizer, backed by single-table) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 599.79 Tm (DynamoDB.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 585.59 Tm (- Directed all architecture decisions and recorded them in six ADRs, including rejecting Amazon Cognito in) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 572.39 Tm (favour of passwordless email auth with opaque server-side sessions, and choosing static export on) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 559.19 Tm (CloudFront with origin access control over any always-on compute.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 544.99 Tm (- Retired a shipped verification method after determining a language model could pass it from the) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 531.79 Tm (published brief, accepting reduced product scope in exchange for a defensible claim.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 517.59 Tm (- Removed two further evidence paths, file upload and peer confirmation, on the principle that a source the) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 504.39 Tm (candidate controls or selects is not independent verification.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 490.19 Tm (- Integrated Paystack with HMAC-SHA512 webhook verification, payload-hash deduplication and hourly) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 476.99 Tm (reconciliation; proved forgery rejection, signature acceptance and replay deduplication against the live) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 463.79 Tm (account.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 449.59 Tm (- Diagnosed eleven consecutive live payment failures to gateway evidence: eight abandonments and three) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 436.39 Tm (test cards presented to a live account. Concluded there was no product defect and changed nothing.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 422.19 Tm (- Built deployment safety after shipping a demo build to production: the release process now refuses to) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 408.99 Tm (build without an https API URL read from Terraform output, refuses to upload if a demo marker is present,) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 395.79 Tm (and smoke-tests the deployed commit.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 381.59 Tm (- Enforced cost control by design: reserved concurrency on all 55 functions, on-demand DynamoDB, no) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 368.39 Tm (NAT Gateway, no always-on compute, and feature flags read per invocation for sub-minute mitigation) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 355.19 Tm (without a deploy.) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 340.99 Tm (- Established data-minimisation boundaries: stated minimum pay never leaves the candidate record,) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 327.79 Tm (contact details are released only after mutual interest and an entitlement check, and AI inputs exclude all) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 314.59 Tm (contact and protected fields.) Tj ET
+BT /F2 10 Tf 1 0 0 1 56.70 294.39 Tm ([PREVIOUS ROLE TITLE], [COMPANY] [MMM YYYY - MMM YYYY]) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 280.19 Tm (- [PLACEHOLDER: an achievement with a number in it]) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 265.99 Tm (- [PLACEHOLDER: an achievement showing ownership]) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 251.79 Tm (- [PLACEHOLDER: an achievement showing collaboration]) Tj ET
+BT /F2 10 Tf 1 0 0 1 56.70 231.59 Tm ([EARLIER ROLE TITLE], [COMPANY] [MMM YYYY - MMM YYYY]) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 217.39 Tm (- [PLACEHOLDER]) Tj ET
+BT /F1 10 Tf 1 0 0 1 66.70 203.19 Tm (- [PLACEHOLDER]) Tj ET
+BT /F2 11 Tf 1 0 0 1 56.70 182.99 Tm (SKILLS) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 167.79 Tm (Cloud and infrastructure: AWS Lambda, API Gateway, DynamoDB, S3, CloudFront, SES, EventBridge,) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 154.59 Tm (CloudWatch, Parameter Store, IAM, ACM, Terraform) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 140.39 Tm (Product: technical specification, architecture decision records, trade-off analysis, pricing strategy, privacy) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 127.19 Tm (and data-minimisation design) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 112.99 Tm (Engineering practice: serverless architecture, single-table design, idempotency, webhook verification, feature) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 99.79 Tm (flags, CI/CD, incident response) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 85.59 Tm (Payments: Paystack integration, webhook signature verification, reconciliation) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 71.39 Tm (Stack: TypeScript, Next.js, Node.js, GitHub Actions) Tj ET
+
+endstream
+endobj
+7 0 obj
+<< /Length 132 >>
+stream
+BT /F2 11 Tf 1 0 0 1 56.70 771.99 Tm (EDUCATION) Tj ET
+BT /F1 10 Tf 1 0 0 1 56.70 756.79 Tm ([DEGREE], [INSTITUTION], [YEAR]) Tj ET
+
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000337 00000 n 
+0000000447 00000 n 
+0000000557 00000 n 
+0000006216 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info << /Title (Resume) /CreationDate (D:20260914155103Z) >> >>
+startxref
+6399
+%%EOF

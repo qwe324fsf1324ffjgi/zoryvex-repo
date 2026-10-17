@@ -1,0 +1,37 @@
+// Extensionless-route rewrite + apex/www redirect for a Next.js static
+// export (output: 'export', trailingSlash: false → routes render to
+// "<route>.html", not "<route>/index.html"). Runs on viewer-request, before
+// the cache lookup, so the rewritten URI is also what gets cached.
+//
+// A request for a real file (last path segment already has a ".") is never
+// rewritten, so a genuinely missing JS/CSS/image asset still reaches S3 and
+// comes back as a real 404 — see docs/ARCHITECTURE.md and CLAUDE.md's
+// requirement that this must not become "an unsafe catch-all that serves
+// HTML for missing assets."
+function handler(event) {
+  var request = event.request;
+  var wwwDomain = '${www_domain}';
+  var apexDomain = '${apex_domain}';
+
+  if (wwwDomain !== '' && request.headers.host && request.headers.host.value === wwwDomain) {
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: {
+        location: { value: 'https://' + apexDomain + request.uri },
+      },
+    };
+  }
+
+  var uri = request.uri;
+  var lastSlash = uri.lastIndexOf('/');
+  var lastSegment = uri.substring(lastSlash + 1);
+
+  if (uri.endsWith('/')) {
+    request.uri = uri + 'index.html';
+  } else if (lastSegment.indexOf('.') === -1) {
+    request.uri = uri + '.html';
+  }
+
+  return request;
+}
