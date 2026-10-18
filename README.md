@@ -15,7 +15,6 @@
 </p>
 
 <p align="center">
-  <a href="https://zoryvex.space">WEBSITE</a> •
   <a href="https://drive.google.com/file/d/1xPQ9PVHmY-jT6xT1HlR1C790GmmVgUPA/view?usp=drivesdk">INTRODUCTION VIDEO</a>
 </p>
 
