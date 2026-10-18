@@ -133,7 +133,5 @@ Zoryvex is working toward a more trustworthy future of hiring, supported by thou
 <p align="center">
   <strong>ZORYVEX</strong><br>
   <em>Proof-first hiring. Real opportunities.</em><br><br>
-  <a href="https://zoryvex.space">zoryvex.space</a>
-  &nbsp; • &nbsp;
   <a href="https://drive.google.com/file/d/1xPQ9PVHmY-jT6xT1HlR1C790GmmVgUPA/view?usp=drivesdk">Watch the introduction</a>
 </p>
