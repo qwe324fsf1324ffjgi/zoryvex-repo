@@ -29,13 +29,6 @@ Zoryvex aims to help employers and candidates move toward a more evidence-driven
 
 > **Trust should be demonstrated, not merely claimed.**
 
-## Architecture at a Glance
-
-Zoryvex's architecture is designed around serverless AWS services, managed infrastructure, security controls, and operational visibility.
-
-<p align="center">
-  <img src="Zoryvex%20Serverless%20AWS%20Architecture.png" alt="Zoryvex serverless AWS architecture diagram showing the frontend, API layer, data layer, security, monitoring, networking, and external integrations" width="100%">
-</p>
 
 <p align="center">
   <em>Zoryvex — Serverless AWS Architecture</em>
